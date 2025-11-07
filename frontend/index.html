@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agendamento Online - Caroline Marques Brito</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Flatpickr para calendário -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>Caroline Marques Brito</h1>
+                <p class="subtitle">Psicóloga Clínica - CRP 14/09165-4</p>
+            </div>
+        </header>
+
+        <!-- Stepper (Passos) -->
+        <div class="stepper">
+            <div class="step active" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-label">Escolha a Data</div>
+            </div>
+            <div class="step" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-label">Horário</div>
+            </div>
+            <div class="step" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-label">Seus Dados</div>
+            </div>
+            <div class="step" data-step="4">
+                <div class="step-number">4</div>
+                <div class="step-label">Pagamento</div>
+            </div>
+        </div>
+
+        <!-- Conteúdo Principal -->
+        <main class="main-content">
+            
+            <!-- PASSO 1: Escolher Data -->
+            <div class="step-content active" id="step1">
+                <h2>Escolha a Data da Sessão</h2>
+                <p class="step-description">Selecione uma data disponível no calendário abaixo:</p>
+                
+                <div class="calendar-container">
+                    <input type="text" id="datepicker" placeholder="Clique para selecionar a data">
+                </div>
+
+                <!-- Escolha do Tipo de Sessão -->
+                <div class="tipo-sessao-container">
+                    <h3>Tipo de Sessão</h3>
+                    <div class="tipo-sessao-opcoes">
+                        <div class="tipo-box">
+                            <input type="radio" id="tipoAvulsa" name="tipoSessao" value="avulsa" checked>
+                            <label for="tipoAvulsa" class="tipo-label">
+                                <strong>Sessão Avulsa</strong>
+                                <span class="preco">R$ 150,00</span>
+                                <span class="descricao">Pagamento único por sessão</span>
+                            </label>
+                        </div>
+
+                        <div class="tipo-box">
+                            <input type="radio" id="tipoPacoteMensal" name="tipoSessao" value="pacote_mensal">
+                            <label for="tipoPacoteMensal" class="tipo-label">
+                                <strong>Pacote Mensal</strong>
+                                <span class="preco">R$ 480,00</span>
+                                <span class="descricao">4 sessões mensais (R$ 120/sessão)</span>
+                            </label>
+                        </div>
+
+                        <div class="tipo-box">
+                            <input type="radio" id="tipoPacoteAnual" name="tipoSessao" value="pacote_anual">
+                            <label for="tipoPacoteAnual" class="tipo-label">
+                                <strong>Pacote Anual</strong>
+                                <span class="preco">R$ 5.760,00</span>
+                                <span class="descricao">48 sessões anuais (R$ 120/sessão) - Economia de R$ 1.440!</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alerta de Horário Fixo -->
+                <div class="alerta-horario-fixo" id="alertaHorarioFixo" style="display: none;">
+                    <div class="alerta-icon">⚠️</div>
+                    <div class="alerta-content">
+                        <strong>Atenção: Horário Fixo</strong>
+                        <p>Ao escolher um <strong>pacote</strong>, todas as suas sessões serão agendadas no <strong>mesmo dia da semana</strong> e no <strong>mesmo horário</strong> que você selecionar na primeira sessão.</p>
+                        <p><strong>Exemplo:</strong> Se você escolher <em>quarta-feira às 19:00</em>, todas as suas sessões do pacote serão nas quartas-feiras às 19:00.</p>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h3>📋 Informações Importantes:</h3>
+                    <ul>
+                        <li>Sessões de <strong>1 hora (60 minutos)</strong></li>
+                        <li>Atendimento de <strong>Segunda a Sexta</strong></li>
+                        <li>Horários disponíveis: <strong>18h, 19h e 20:30h</strong></li>
+                    </ul>
+                </div>
+
+                <button class="btn btn-primary" id="btnNextStep1" disabled>
+                    Próximo: Escolher Horário →
+                </button>
+            </div>
+
+            <!-- PASSO 2: Escolher Horário -->
+            <div class="step-content" id="step2">
+                <h2>Escolha o Horário</h2>
+                <p class="step-description">Data selecionada: <strong id="selectedDate"></strong></p>
+                
+                <div class="loading" id="loadingHorarios" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Carregando horários disponíveis...</p>
+                </div>
+
+                <div class="horarios-grid" id="horariosGrid">
+                    <!-- Horários serão inseridos aqui via JavaScript -->
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" id="btnBackStep2">
+                        ← Voltar
+                    </button>
+                    <button class="btn btn-primary" id="btnNextStep2" disabled>
+                        Próximo: Seus Dados →
+                    </button>
+                </div>
+            </div>
+
+            <!-- PASSO 3: Dados do Paciente -->
+            <div class="step-content" id="step3">
+                <h2>Seus Dados</h2>
+                <p class="step-description">Preencha seus dados para confirmar o agendamento:</p>
+                
+                <form id="formDadosPaciente" class="form-dados">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="nome">Nome Completo *</label>
+                            <input type="text" id="nome" name="nome" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="email">E-mail *</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="telefone">Telefone/WhatsApp *</label>
+                            <input type="tel" id="telefone" name="telefone" placeholder="(00) 00000-0000" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cpf">CPF *</label>
+                            <input type="text" id="cpf" name="cpf" placeholder="000.000.000-00" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dataNascimento">Data de Nascimento *</label>
+                            <input type="date" id="dataNascimento" name="dataNascimento" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cep">CEP</label>
+                        <input type="text" id="cep" name="cep" placeholder="00000-000">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="rua">Rua</label>
+                            <input type="text" id="rua" name="rua">
+                        </div>
+                        <div class="form-group" style="max-width: 100px;">
+                            <label for="numero">Número</label>
+                            <input type="text" id="numero" name="numero">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="bairro">Bairro</label>
+                            <input type="text" id="bairro" name="bairro">
+                        </div>
+                        <div class="form-group">
+                            <label for="cidade">Cidade</label>
+                            <input type="text" id="cidade" name="cidade">
+                        </div>
+                        <div class="form-group" style="max-width: 80px;">
+                            <label for="estado">UF</label>
+                            <input type="text" id="estado" name="estado" maxlength="2">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="observacoes">Observações (opcional)</label>
+                        <textarea id="observacoes" name="observacoes" rows="3" placeholder="Alguma informação adicional que deseja compartilhar..."></textarea>
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="primeiraConsulta" name="primeiraConsulta" checked>
+                            Esta é minha primeira consulta
+                        </label>
+                    </div>
+                </form>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" id="btnBackStep3">
+                        ← Voltar
+                    </button>
+                    <button class="btn btn-primary" id="btnNextStep3">
+                        Próximo: Pagamento →
+                    </button>
+                </div>
+            </div>
+
+            <!-- PASSO 4: Pagamento -->
+            <div class="step-content" id="step4">
+                <h2>Confirmação e Pagamento</h2>
+                
+                <div class="resumo-agendamento">
+                    <h3>📅 Resumo do Agendamento</h3>
+                    <div class="resumo-item">
+                        <span class="resumo-label">Data:</span>
+                        <span class="resumo-value" id="resumoData"></span>
+                    </div>
+                    <div class="resumo-item">
+                        <span class="resumo-label">Horário:</span>
+                        <span class="resumo-value" id="resumoHorario"></span>
+                    </div>
+                    <div class="resumo-item">
+                        <span class="resumo-label">Nome:</span>
+                        <span class="resumo-value" id="resumoNome"></span>
+                    </div>
+                    <div class="resumo-item">
+                        <span class="resumo-label">E-mail:</span>
+                        <span class="resumo-value" id="resumoEmail"></span>
+                    </div>
+                    <div class="resumo-item">
+                        <span class="resumo-label">Tipo:</span>
+                        <span class="resumo-value" id="resumoTipo">Sessão Individual</span>
+                    </div>
+                    <div class="resumo-item destaque">
+                        <span class="resumo-label">Valor:</span>
+                        <span class="resumo-value" id="resumoValor">R$ 150,00</span>
+                    </div>
+                </div>
+
+                <div class="pagamento-opcoes">
+                    <h3>💳 Escolha a Forma de Pagamento</h3>
+                    
+                    <!-- Opções de Parcelamento (aparece só para pacotes) -->
+                    <div id="parcelamentoContainer" style="display: none;">
+                        <div class="parcelamento-info">
+                            <h4>Selecione o número de parcelas:</h4>
+                            <select id="selectParcelas" class="select-parcelas">
+                                <!-- Opções serão preenchidas via JavaScript -->
+                            </select>
+                            <p class="parcelamento-detalhe" id="parcelamentoDetalhe"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="pagamento-box">
+                        <input type="radio" id="pagamentoPix" name="metodoPagamento" value="pix" checked>
+                        <label for="pagamentoPix" class="pagamento-label">
+                            <strong>PIX</strong>
+                            <span>Pagamento instantâneo</span>
+                        </label>
+                    </div>
+
+                    <div class="pagamento-box">
+                        <input type="radio" id="pagamentoCartao" name="metodoPagamento" value="cartao">
+                        <label for="pagamentoCartao" class="pagamento-label">
+                            <strong>Cartão de Crédito</strong>
+                            <span>Parcelamento disponível</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" id="btnBackStep4">
+                        ← Voltar
+                    </button>
+                    <button class="btn btn-success" id="btnFinalizarAgendamento">
+                        ✓ Confirmar e Pagar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tela de Sucesso -->
+            <div class="step-content" id="stepSucesso" style="display: none;">
+                <div class="sucesso-container">
+                    <div class="sucesso-icon">✓</div>
+                    <h2>Agendamento Confirmado!</h2>
+                    <p>Seu agendamento foi realizado com sucesso!</p>
+                    
+                    <div class="info-box">
+                        <p><strong>📧 Enviamos um e-mail de confirmação</strong> com todos os detalhes do seu agendamento.</p>
+                        <p>Você receberá lembretes antes da sua sessão.</p>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="window.location.href='https://psicarolmarques.com.br'">
+                        Voltar ao Site
+                    </button>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+        <p class="subtitle">Psicóloga Clínica - CRP 14/09165-4</p>
+            <p>Todos os direitos reservados</p>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/agendamento.js"></script>
+</body>
+</html>
