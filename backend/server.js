@@ -8,7 +8,7 @@ const app = express();
 
 // ============= MIDDLEWARE =============
 app.use(cors({
-  origin: '*',
+  origin: ['https://psicarolmarques.com.br', 'http://localhost:5500'],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
