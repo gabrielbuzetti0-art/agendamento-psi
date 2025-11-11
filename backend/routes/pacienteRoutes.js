@@ -1,25 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const agendamentoController = require('../controllers/agendamentoController');
+const pacienteController = require('../controllers/pacienteController');
 
-// IMPORTANTE: Rotas específicas ANTES das rotas com parâmetros dinâmicos
+// Buscar paciente por email (deve vir ANTES de /:id)
+router.get('/email/:email', pacienteController.buscarPacientePorEmail);
 
-// Buscar horários disponíveis para a data (Etapa 2)
-router.get('/horarios-disponiveis', agendamentoController.buscarHorariosDisponiveis);
+// Listar todos os pacientes
+router.get('/', pacienteController.listarPacientes);
 
-// Listar agendamentos
-router.get('/', agendamentoController.listarAgendamentos);
+// Criar novo paciente
+router.post('/', pacienteController.criarPaciente);
 
-// Criar novo agendamento
-router.post('/', agendamentoController.criarAgendamento);
+// Buscar paciente por ID
+router.get('/:id', pacienteController.buscarPacientePorId);
 
-// Buscar agendamento por ID
-router.get('/:id', agendamentoController.buscarAgendamentoPorId);
+// Atualizar paciente
+router.put('/:id', pacienteController.atualizarPaciente);
 
-// Atualizar status do agendamento
-router.patch('/:id/status', agendamentoController.atualizarStatusAgendamento);
-
-// Cancelar agendamento
-router.patch('/:id/cancelar', agendamentoController.cancelarAgendamento);
+// Desativar paciente
+router.delete('/:id', pacienteController.desativarPaciente);
 
 module.exports = router;
