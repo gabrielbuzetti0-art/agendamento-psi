@@ -387,7 +387,7 @@ exports.buscarHorariosDisponiveis = async (req, res) => {
       });
     }
 
-    // Monta Date local para aquele dia
+    // Monta Date local para aquele dia (sem horário)
     const [ano, mes, dia] = data.split('-').map(Number);
     const dataConsulta = new Date(ano, mes - 1, dia);
 
@@ -405,9 +405,8 @@ exports.buscarHorariosDisponiveis = async (req, res) => {
     fimDia.setHours(23, 59, 59, 999);
 
     const tipoSessao = tipo || 'avulsa'; // padrão
-
-    // Horários base de atendimento
     const horariosBase = ['18:00', '19:00', '20:30'];
+    const timeZone = 'America/Sao_Paulo';
 
     let horariosDisponiveis = [];
     let detalhes = {};
@@ -420,13 +419,12 @@ exports.buscarHorariosDisponiveis = async (req, res) => {
       const totalSessoes = tipoSessao === 'pacote_mensal' ? 4 : 48;
       const diaSemana = dataConsulta.getDay();
 
-      // Período total que o pacote vai ocupar
+      // Período total do pacote
       const inicioPeriodo = new Date(inicioDia);
       const fimPeriodo = new Date(dataConsulta);
       fimPeriodo.setDate(fimPeriodo.getDate() + 7 * (totalSessoes - 1));
       fimPeriodo.setHours(23, 59, 59, 999);
 
-      // Busca todos os agendamentos no período
       const agendamentosPeriodo = await Agendamento.find({
         dataHora: { $gte: inicioPeriodo, $lte: fimPeriodo },
         status: { $nin: ['cancelado'] }
@@ -436,16 +434,25 @@ exports.buscarHorariosDisponiveis = async (req, res) => {
 
       horariosDisponiveis = horariosBase.filter((horaAlvo) => {
         const conflito = agendamentosPeriodo.some((ag) => {
-          const d = new Date(ag.dataHora);
+          const dUTC = new Date(ag.dataHora);
 
-          // Apenas mesmo dia da semana
-          if (d.getDay() !== diaSemana) return false;
+          // Converter para horário de São Paulo
+          const dLocal = new Date(
+            dUTC.toLocaleString('en-US', { timeZone })
+          );
 
-          const h = d.getHours().toString().padStart(2, '0');
-          const m = d.getMinutes().toString().padStart(2, '0');
-          const hm = `${h}:${m}`;
+          // Mesmo dia da semana?
+          if (dLocal.getDay() !== diaSemana) return false;
 
-          return hm === horaAlvo;
+          // Hora local no formato HH:MM
+          const horaLocal = dLocal.toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZone
+          });
+
+          return horaLocal === horaAlvo;
         });
 
         conflitosPorHorario[horaAlvo] = conflito;
@@ -470,10 +477,15 @@ exports.buscarHorariosDisponiveis = async (req, res) => {
       });
 
       const horariosOcupados = agendamentosOcupados.map((ag) => {
-        const d = new Date(ag.dataHora);
-        const h = d.getHours().toString().padStart(2, '0');
-        const m = d.getMinutes().toString().padStart(2, '0');
-        return `${h}:${m}`;
+        const dUTC = new Date(ag.dataHora);
+
+        // Converter para horário de São Paulo e extrair HH:MM
+        return dUTC.toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone
+        });
       });
 
       horariosDisponiveis = horariosBase.filter(
@@ -482,7 +494,8 @@ exports.buscarHorariosDisponiveis = async (req, res) => {
 
       detalhes = {
         tipoSessao,
-        totalOcupados: horariosOcupados.length
+        totalOcupados: horariosOcupados.length,
+        horariosOcupados
       };
     }
 
