@@ -72,11 +72,19 @@ const agendamentoAPI = {
         return fetchAPI(`/agendamentos${sufixo}`);
     },
 
-    // Buscar horários disponíveis para uma data (usado na Etapa 2)
-    buscarHorariosDisponiveis: (dataISO) => {
-        console.log('🔗 API: Buscando horários disponíveis para data:', dataISO);
-        return fetchAPI(`/agendamentos/horarios-disponiveis?data=${encodeURIComponent(dataISO)}`);
-    },
+   // Buscar horários disponíveis para uma data (usado na Etapa 2)
+buscarHorariosDisponiveis: (dataISO, tipoSessao) => {
+    console.log('🔗 API: Buscando horários disponíveis para data:', dataISO, 'tipo:', tipoSessao);
+
+    const params = new URLSearchParams();
+    params.append('data', dataISO);
+    if (tipoSessao) {
+        params.append('tipo', tipoSessao);
+    }
+
+    return fetchAPI(`/agendamentos/horarios-disponiveis?${params.toString()}`);
+},
+
 
     // Buscar agendamento por ID
     buscarPorId: (id) => fetchAPI(`/agendamentos/${id}`),
@@ -254,3 +262,15 @@ const utils = {
         }
     }
 };
+// ==============================
+// Manter servidor acordado
+// ==============================
+// Fazer ping a cada 10 minutos para evitar que servidor durma
+setInterval(async () => {
+    try {
+        await fetch(`${API_URL}/health`);
+        console.log('✅ Servidor mantido ativo');
+    } catch (error) {
+        console.log('⚠️ Ping falhou, mas não é crítico');
+    }
+}, 10 * 60 * 1000); // 10 minutos

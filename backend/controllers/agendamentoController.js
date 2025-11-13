@@ -22,10 +22,40 @@ async function criarSessoesRecorrentes(pacienteId, dataHoraPrimeiraSessao, tipo,
 
   console.log(`📦 Criando pacote ${tipoPacote} com ${totalSessoes} sessões`);
 
-  // Sessão 1 (principal)
+  // ------------------------------------
+  // 1) Montar TODAS as datas do pacote
+  // ------------------------------------
+  const datasSessoes = [];
+  let cursor = new Date(primeiraSessao);
+
+  for (let i = 0; i < totalSessoes; i++) {
+    datasSessoes.push(new Date(cursor));
+    cursor.setDate(cursor.getDate() + 7); // próximo mesmo dia da semana
+  }
+
+  // ------------------------------------
+  // 2) Verificar CONFLITO em todas elas
+  // ------------------------------------
+  for (const dataSessao of datasSessoes) {
+    const conflito = await Agendamento.findOne({
+      dataHora: dataSessao,
+      status: { $nin: ['cancelado'] }
+    });
+
+    if (conflito) {
+      console.error('❌ Conflito encontrado em pacote:', dataSessao.toISOString());
+      throw new Error(
+        `Conflito de horário no pacote: já existe um agendamento em ${dataSessao.toLocaleString('pt-BR')}`
+      );
+    }
+  }
+
+  // ------------------------------------
+  // 3) Criar a sessão principal
+  // ------------------------------------
   const agendamentoPrincipal = await Agendamento.create({
     paciente: pacienteId,
-    dataHora: primeiraSessao,
+    dataHora: datasSessoes[0],
     tipo,
     valor,
     observacoes,
@@ -46,27 +76,26 @@ async function criarSessoesRecorrentes(pacienteId, dataHoraPrimeiraSessao, tipo,
   });
 
   agendamentosCriados.push(agendamentoPrincipal);
-  console.log(`✅ Sessão 1 criada: ${primeiraSessao.toISOString()}`);
+  console.log(`✅ Sessão 1 criada: ${datasSessoes[0].toISOString()}`);
 
-  // Demais sessões (recorrentes semanais)
-  let proximaData = new Date(primeiraSessao);
-
-  for (let i = 2; i <= totalSessoes; i++) {
-    proximaData = new Date(proximaData);
-    proximaData.setDate(proximaData.getDate() + 7);
+  // ------------------------------------
+  // 4) Criar as demais sessões (recorrentes)
+  // ------------------------------------
+  for (let i = 1; i < totalSessoes; i++) {
+    const dataSessao = datasSessoes[i];
 
     const agendamentoSeguinte = await Agendamento.create({
       paciente: pacienteId,
-      dataHora: proximaData,
+      dataHora: dataSessao,
       tipo,
       valor: 0,
-      observacoes: `Sessão ${i} de ${totalSessoes} - Pacote ${tipoPacote}`,
+      observacoes: `Sessão ${i + 1} de ${totalSessoes} - Pacote ${tipoPacote}`,
       status: 'confirmado',
       pacote: {
         ehPacote: true,
         tipoPacote,
         totalSessoes,
-        sessaoAtual: i,
+        sessaoAtual: i + 1,
         pacotePrincipalId: agendamentoPrincipal._id,
         diaSemanaFixo,
         horarioFixo
@@ -78,7 +107,7 @@ async function criarSessoesRecorrentes(pacienteId, dataHoraPrimeiraSessao, tipo,
     });
 
     agendamentosCriados.push(agendamentoSeguinte);
-    console.log(`✅ Sessão ${i} criada: ${proximaData.toISOString()}`);
+    console.log(`✅ Sessão ${i + 1} criada: ${dataSessao.toISOString()}`);
   }
 
   return agendamentosCriados;
@@ -349,7 +378,7 @@ exports.cancelarAgendamento = async (req, res) => {
 // =========================
 exports.buscarHorariosDisponiveis = async (req, res) => {
   try {
-    const { data } = req.query;
+    const { data, tipo } = req.query;
 
     if (!data) {
       return res.status(400).json({
@@ -375,34 +404,95 @@ exports.buscarHorariosDisponiveis = async (req, res) => {
     const fimDia = new Date(dataConsulta);
     fimDia.setHours(23, 59, 59, 999);
 
-    // Busca agendamentos desse dia (ativos)
-    const agendamentosOcupados = await Agendamento.find({
-      dataHora: { $gte: inicioDia, $lte: fimDia },
-      status: { $nin: ['cancelado'] }
-    });
+    const tipoSessao = tipo || 'avulsa'; // padrão
 
-    // Horários base (ajuste conforme sua disponibilidade)
+    // Horários base de atendimento
     const horariosBase = ['18:00', '19:00', '20:30'];
 
-    // Extrai horários ocupados no formato HH:MM
-    const horariosOcupados = agendamentosOcupados.map((ag) => {
-      const d = new Date(ag.dataHora);
-      const h = d.getHours().toString().padStart(2, '0');
-      const m = d.getMinutes().toString().padStart(2, '0');
-      return `${h}:${m}`;
-    });
+    let horariosDisponiveis = [];
+    let detalhes = {};
 
-    // Filtra horários livres
-    const horariosDisponiveis = horariosBase.filter(
-      (hora) => !horariosOcupados.includes(hora)
-    );
+    // -----------------------------------------
+    // CASO 1: PACOTE MENSAL / PACOTE ANUAL
+    // Precisa ter todas as semanas livres
+    // -----------------------------------------
+    if (tipoSessao === 'pacote_mensal' || tipoSessao === 'pacote_anual') {
+      const totalSessoes = tipoSessao === 'pacote_mensal' ? 4 : 48;
+      const diaSemana = dataConsulta.getDay();
+
+      // Período total que o pacote vai ocupar
+      const inicioPeriodo = new Date(inicioDia);
+      const fimPeriodo = new Date(dataConsulta);
+      fimPeriodo.setDate(fimPeriodo.getDate() + 7 * (totalSessoes - 1));
+      fimPeriodo.setHours(23, 59, 59, 999);
+
+      // Busca todos os agendamentos no período
+      const agendamentosPeriodo = await Agendamento.find({
+        dataHora: { $gte: inicioPeriodo, $lte: fimPeriodo },
+        status: { $nin: ['cancelado'] }
+      });
+
+      const conflitosPorHorario = {};
+
+      horariosDisponiveis = horariosBase.filter((horaAlvo) => {
+        const conflito = agendamentosPeriodo.some((ag) => {
+          const d = new Date(ag.dataHora);
+
+          // Apenas mesmo dia da semana
+          if (d.getDay() !== diaSemana) return false;
+
+          const h = d.getHours().toString().padStart(2, '0');
+          const m = d.getMinutes().toString().padStart(2, '0');
+          const hm = `${h}:${m}`;
+
+          return hm === horaAlvo;
+        });
+
+        conflitosPorHorario[horaAlvo] = conflito;
+        return !conflito;
+      });
+
+      detalhes = {
+        tipoSessao,
+        totalSessoes,
+        dataInicio: inicioPeriodo.toISOString(),
+        dataFim: fimPeriodo.toISOString(),
+        conflitosPorHorario
+      };
+    } else {
+      // -----------------------------------------
+      // CASO 2: SESSÃO AVULSA / DEMAIS TIPOS
+      // Só precisa garantir o próprio dia
+      // -----------------------------------------
+      const agendamentosOcupados = await Agendamento.find({
+        dataHora: { $gte: inicioDia, $lte: fimDia },
+        status: { $nin: ['cancelado'] }
+      });
+
+      const horariosOcupados = agendamentosOcupados.map((ag) => {
+        const d = new Date(ag.dataHora);
+        const h = d.getHours().toString().padStart(2, '0');
+        const m = d.getMinutes().toString().padStart(2, '0');
+        return `${h}:${m}`;
+      });
+
+      horariosDisponiveis = horariosBase.filter(
+        (hora) => !horariosOcupados.includes(hora)
+      );
+
+      detalhes = {
+        tipoSessao,
+        totalOcupados: horariosOcupados.length
+      };
+    }
 
     return res.status(200).json({
       success: true,
       data: {
         data,
+        tipo: tipoSessao,
         horariosDisponiveis,
-        totalOcupados: horariosOcupados.length
+        ...detalhes
       }
     });
   } catch (error) {
