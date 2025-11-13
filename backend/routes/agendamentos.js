@@ -15,6 +15,8 @@ router.get('/horarios-disponiveis', async (req, res) => {
             });
         }
 
+        console.log('📅 Buscando horários para:', data, 'tipo:', tipo);
+
         // Horários fixos disponíveis
         const horariosFixos = ['18:00', '19:00', '20:30'];
         
@@ -34,28 +36,38 @@ router.get('/horarios-disponiveis', async (req, res) => {
             status: { $ne: 'cancelado' }
         });
 
-        // Função para verificar se um horário está ocupado
-        const horarioOcupado = (horario) => {
-            return agendamentosExistentes.some(ag => {
+        console.log('📋 Agendamentos no dia:', agendamentosExistentes.length);
+
+        // Verificar conflitos com pacotes em outras datas
+        const diaSemana = new Date(data).getDay(); // 0=domingo, 1=segunda, etc.
+        
+        const agendamentosPacote = await Agendamento.find({
+            tipo: { $in: ['pacote_mensal', 'pacote_anual'] },
+            status: { $ne: 'cancelado' }
+        });
+
+        console.log('📦 Total de pacotes ativos:', agendamentosPacote.length);
+
+        // Filtrar horários disponíveis
+        const horariosDisponiveis = horariosFixos.filter(horario => {
+            // 1. Verificar se horário está ocupado HOJE
+            const ocupadoHoje = agendamentosExistentes.some(ag => {
                 const horaAgendamento = new Date(ag.dataHora).toLocaleTimeString('pt-BR', {
                     hour: '2-digit',
                     minute: '2-digit'
                 });
                 return horaAgendamento === horario;
             });
-        };
-
-        // Função para verificar conflitos com pacotes
-        const verificarConflitosPacote = async (horario, dataConsulta) => {
-            const diaSemana = new Date(dataConsulta).getDay(); // 0=domingo, 1=segunda, etc.
             
-            // Buscar agendamentos de pacotes no mesmo horário e dia da semana
-            const agendamentosPacote = await Agendamento.find({
-                tipo: { $in: ['pacote_mensal', 'pacote_anual'] },
-                status: { $ne: 'cancelado' }
-            });
+            if (ocupadoHoje) {
+                console.log(`⏰ ${horario} - Ocupado hoje`);
+                return false;
+            }
 
-            for (const ag of agendamentosPacote) {
+            // 2. Verificar se há conflito com algum pacote
+            const dataConsultaTimestamp = new Date(data).getTime();
+            
+            const conflitoPacote = agendamentosPacote.some(ag => {
                 const diaAgendamento = new Date(ag.dataHora).getDay();
                 const horaAgendamento = new Date(ag.dataHora).toLocaleTimeString('pt-BR', {
                     hour: '2-digit',
@@ -64,45 +76,39 @@ router.get('/horarios-disponiveis', async (req, res) => {
 
                 // Se for mesmo dia da semana e mesmo horário
                 if (diaAgendamento === diaSemana && horaAgendamento === horario) {
-                    // Verificar se a data da consulta está dentro do período do pacote
-                    const dataConsultaTimestamp = new Date(dataConsulta).getTime();
                     const dataAgendamentoTimestamp = new Date(ag.dataHora).getTime();
                     
                     if (ag.tipo === 'pacote_mensal') {
                         // Pacote mensal: 4 semanas
-                        const umMes = 4 * 7 * 24 * 60 * 60 * 1000; // 4 semanas em ms
+                        const umMes = 4 * 7 * 24 * 60 * 60 * 1000;
                         if (dataConsultaTimestamp >= dataAgendamentoTimestamp && 
                             dataConsultaTimestamp < dataAgendamentoTimestamp + umMes) {
-                            return true; // Horário ocupado pelo pacote
+                            console.log(`📦 ${horario} - Conflito com pacote mensal`);
+                            return true;
                         }
                     } else if (ag.tipo === 'pacote_anual') {
                         // Pacote anual: 1 ano
                         const umAno = 365 * 24 * 60 * 60 * 1000;
                         if (dataConsultaTimestamp >= dataAgendamentoTimestamp && 
                             dataConsultaTimestamp < dataAgendamentoTimestamp + umAno) {
-                            return true; // Horário ocupado pelo pacote
+                            console.log(`📦 ${horario} - Conflito com pacote anual`);
+                            return true;
                         }
                     }
                 }
-            }
-            
-            return false;
-        };
+                
+                return false;
+            });
 
-        // Filtrar horários disponíveis
-        const horariosDisponiveis = [];
-        
-        for (const horario of horariosFixos) {
-            // Verificar se horário está ocupado neste dia específico
-            const ocupadoHoje = horarioOcupado(horario);
-            
-            // Verificar se horário está em conflito com algum pacote
-            const conflitoPacote = await verificarConflitosPacote(horario, data);
-            
-            if (!ocupadoHoje && !conflitoPacote) {
-                horariosDisponiveis.push(horario);
+            if (conflitoPacote) {
+                return false;
             }
-        }
+
+            console.log(`✅ ${horario} - Disponível`);
+            return true;
+        });
+
+        console.log('✅ Horários disponíveis finais:', horariosDisponiveis);
 
         res.json({
             success: true,
@@ -110,7 +116,7 @@ router.get('/horarios-disponiveis', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erro ao buscar horários disponíveis:', error);
+        console.error('❌ Erro ao buscar horários disponíveis:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Erro ao buscar horários disponíveis',
@@ -169,7 +175,7 @@ router.post('/', async (req, res) => {
             });
         }
 
-        // Verificar conflito de horário
+        // Verificar conflito de horário EXATO
         const dataAgendamento = new Date(dataHora);
         const inicioJanela = new Date(dataAgendamento);
         inicioJanela.setMinutes(inicioJanela.getMinutes() - 30);
