@@ -387,116 +387,67 @@ exports.buscarHorariosDisponiveis = async (req, res) => {
       });
     }
 
-    // Monta Date local para aquele dia (sem horário)
-    const [ano, mes, dia] = data.split('-').map(Number);
-    const dataConsulta = new Date(ano, mes - 1, dia);
+    // Tipo de sessão: avulsa, pacote_mensal, pacote_anual
+    const tipoSessao = tipo || 'avulsa';
 
-    if (isNaN(dataConsulta.getTime())) {
-      return res.status(400).json({
-        success: false,
-        message: 'Data inválida. Use o formato YYYY-MM-DD.'
-      });
-    }
+    // Quantidade de sessões a considerar
+    const totalSessoes =
+      tipoSessao === 'pacote_mensal'
+        ? 4
+        : tipoSessao === 'pacote_anual'
+        ? 48
+        : 1;
 
-    const inicioDia = new Date(dataConsulta);
-    inicioDia.setHours(0, 0, 0, 0);
-
-    const fimDia = new Date(dataConsulta);
-    fimDia.setHours(23, 59, 59, 999);
-
-    const tipoSessao = tipo || 'avulsa'; // padrão
+    // Horários base de atendimento
     const horariosBase = ['18:00', '19:00', '20:30'];
-    const timeZone = 'America/Sao_Paulo';
 
-    let horariosDisponiveis = [];
-    let detalhes = {};
+    // Vamos trabalhar sempre considerando horário de São Paulo (-03:00)
+    // Construímos um intervalo bem amplo que cobre TODAS as datas possíveis desse pacote
+    // Ex.: do primeiro dia às 18:00 até a última sessão às 20:30
+    const primeiraDataMin = new Date(`${data}T18:00:00-03:00`);
+    const ultimaDataMax = new Date(`${data}T20:30:00-03:00`);
+    ultimaDataMax.setDate(ultimaDataMax.getDate() + 7 * (totalSessoes - 1));
 
-    // -----------------------------------------
-    // CASO 1: PACOTE MENSAL / PACOTE ANUAL
-    // Precisa ter todas as semanas livres
-    // -----------------------------------------
-    if (tipoSessao === 'pacote_mensal' || tipoSessao === 'pacote_anual') {
-      const totalSessoes = tipoSessao === 'pacote_mensal' ? 4 : 48;
-      const diaSemana = dataConsulta.getDay();
+    // Buscar todos os agendamentos desse intervalo
+    const agendamentosPeriodo = await Agendamento.find({
+      dataHora: { $gte: primeiraDataMin, $lte: ultimaDataMax },
+      status: { $nin: ['cancelado'] }
+    });
 
-      // Período total do pacote
-      const inicioPeriodo = new Date(inicioDia);
-      const fimPeriodo = new Date(dataConsulta);
-      fimPeriodo.setDate(fimPeriodo.getDate() + 7 * (totalSessoes - 1));
-      fimPeriodo.setHours(23, 59, 59, 999);
+    // Colocamos todos os horários ocupados em um Set, usando timestamp (getTime)
+    const ocupados = new Set(
+      agendamentosPeriodo.map((ag) => new Date(ag.dataHora).getTime())
+    );
 
-      const agendamentosPeriodo = await Agendamento.find({
-        dataHora: { $gte: inicioPeriodo, $lte: fimPeriodo },
-        status: { $nin: ['cancelado'] }
-      });
+    const conflitosPorHorario = {};
+    const horariosDisponiveis = [];
 
-      const conflitosPorHorario = {};
+    // Para cada horário base (18:00, 19:00, 20:30)
+    for (const horaAlvo of horariosBase) {
+      // Monta a data/hora da PRIMEIRA sessão desse horário, em -03:00
+      // Ex.: "2025-11-13T18:00:00-03:00"
+      let atual = new Date(`${data}T${horaAlvo}:00-03:00`);
+      let conflito = false;
 
-      horariosDisponiveis = horariosBase.filter((horaAlvo) => {
-        const conflito = agendamentosPeriodo.some((ag) => {
-          const dUTC = new Date(ag.dataHora);
+      // Verifica todas as sessões necessárias (1, 4 ou 48 semanas)
+      for (let i = 0; i < totalSessoes; i++) {
+        const timestamp = atual.getTime();
 
-          // Converter para horário de São Paulo
-          const dLocal = new Date(
-            dUTC.toLocaleString('en-US', { timeZone })
-          );
+        if (ocupados.has(timestamp)) {
+          conflito = true;
+          break;
+        }
 
-          // Mesmo dia da semana?
-          if (dLocal.getDay() !== diaSemana) return false;
+        // Próxima semana
+        atual = new Date(atual);
+        atual.setDate(atual.getDate() + 7);
+      }
 
-          // Hora local no formato HH:MM
-          const horaLocal = dLocal.toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-            timeZone
-          });
+      conflitosPorHorario[horaAlvo] = conflito;
 
-          return horaLocal === horaAlvo;
-        });
-
-        conflitosPorHorario[horaAlvo] = conflito;
-        return !conflito;
-      });
-
-      detalhes = {
-        tipoSessao,
-        totalSessoes,
-        dataInicio: inicioPeriodo.toISOString(),
-        dataFim: fimPeriodo.toISOString(),
-        conflitosPorHorario
-      };
-    } else {
-      // -----------------------------------------
-      // CASO 2: SESSÃO AVULSA / DEMAIS TIPOS
-      // Só precisa garantir o próprio dia
-      // -----------------------------------------
-      const agendamentosOcupados = await Agendamento.find({
-        dataHora: { $gte: inicioDia, $lte: fimDia },
-        status: { $nin: ['cancelado'] }
-      });
-
-      const horariosOcupados = agendamentosOcupados.map((ag) => {
-        const dUTC = new Date(ag.dataHora);
-
-        // Converter para horário de São Paulo e extrair HH:MM
-        return dUTC.toLocaleTimeString('pt-BR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-          timeZone
-        });
-      });
-
-      horariosDisponiveis = horariosBase.filter(
-        (hora) => !horariosOcupados.includes(hora)
-      );
-
-      detalhes = {
-        tipoSessao,
-        totalOcupados: horariosOcupados.length,
-        horariosOcupados
-      };
+      if (!conflito) {
+        horariosDisponiveis.push(horaAlvo);
+      }
     }
 
     return res.status(200).json({
@@ -505,7 +456,8 @@ exports.buscarHorariosDisponiveis = async (req, res) => {
         data,
         tipo: tipoSessao,
         horariosDisponiveis,
-        ...detalhes
+        totalSessoes,
+        conflitosPorHorario
       }
     });
   } catch (error) {
