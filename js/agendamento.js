@@ -1,4 +1,6 @@
+// ==============================
 // Estado da aplicação
+// ==============================
 let state = {
     currentStep: 1,
     selectedDate: null,
@@ -11,7 +13,9 @@ let state = {
 
 let calendarAvailability = {}; // { 'YYYY-MM-DD': { status: 'full'|'partial'|'none', ... } }
 
+// ==============================
 // Carregar disponibilidade do mês para o calendário
+// ==============================
 async function carregarDisponibilidadeMes(instance, ano, mes) {
     try {
         console.log('📅 Carregando disponibilidade do mês:', ano, mes);
@@ -36,50 +40,17 @@ async function carregarDisponibilidadeMes(instance, ano, mes) {
     }
 }
 
-// Inicialização
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Sistema iniciado');
-    initCalendar();
-    initEventListeners();
-    initMasks();
-    initCEPSearch();
-});
-
-
-// 🔹 Carregar disponibilidade do mês para o calendário
-async function carregarDisponibilidadeMes(instance, ano, mes) {
-    try {
-        console.log('📅 Carregando disponibilidade do mês:', ano, mes);
-        const response = await agendamentoAPI.disponibilidadeCalendario(ano, mes);
-
-        if (!response || !response.data) {
-            console.error('❌ Resposta inválida em disponibilidadeCalendario:', response);
-            calendarAvailability = {};
-            instance.redraw();
-            return;
-        }
-
-        calendarAvailability = response.data;
-        console.log('✅ Disponibilidade do calendário carregada:', calendarAvailability);
-
-        // Redesenha os dias (vai disparar onDayCreate de novo)
-        instance.redraw();
-    } catch (error) {
-        console.error('❌ Erro ao carregar disponibilidade do mês:', error);
-        calendarAvailability = {};
-        instance.redraw();
-    }
-}
-
+// ==============================
 // Inicializar calendário (com cores e bloqueio de dias sem horário)
+// ==============================
 function initCalendar() {
-    const datepicker = flatpickr("#datepicker", {
+    flatpickr("#datepicker", {
         locale: "pt",
         minDate: "today",
         dateFormat: "d/m/Y",
         disable: [
             function(date) {
-                // Domingos e sábados já desabilitados
+                // Desabilita domingos e sábados
                 return (date.getDay() === 0 || date.getDay() === 6);
             }
         ],
@@ -102,7 +73,8 @@ function initCalendar() {
             carregarDisponibilidadeMes(instance, ano, mes);
         },
         onDayCreate: function(dObj, dStr, instance, dayElem) {
-            const dateObj = dayElem.dateObj;
+            // ⚠️ Usar o dObj (Date) direto, é mais seguro que dayElem.dateObj
+            const dateObj = dObj;
             const year = dateObj.getFullYear();
             const month = String(dateObj.getMonth() + 1).padStart(2, '0');
             const day = String(dateObj.getDate()).padStart(2, '0');
@@ -144,7 +116,20 @@ function initCalendar() {
     });
 }
 
+// ==============================
+// Inicialização geral
+// ==============================
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Sistema iniciado');
+    initCalendar();
+    initEventListeners();
+    initMasks();
+    initCEPSearch();
+});
+
+// ==============================
 // Inicializar event listeners
+// ==============================
 function initEventListeners() {
     document.getElementById('btnNextStep1').addEventListener('click', () => {
         console.log('▶️ Passo 1 → 2');
@@ -189,7 +174,9 @@ function initEventListeners() {
     }
 }
 
-// Inicializar máscaras
+// ==============================
+// Máscaras de input
+// ==============================
 function initMasks() {
     const telefoneInput = document.getElementById('telefone');
     const cpfInput = document.getElementById('cpf');
@@ -208,7 +195,9 @@ function initMasks() {
     });
 }
 
-// Inicializar busca de CEP
+// ==============================
+// Busca de CEP
+// ==============================
 function initCEPSearch() {
     const cepInput = document.getElementById('cep');
     
@@ -230,7 +219,9 @@ function initCEPSearch() {
     });
 }
 
-// Navegar para um passo específico
+// ==============================
+// Navegar entre passos
+// ==============================
 function goToStep(stepNumber) {
     console.log('===================================');
     console.log('📍 NAVEGANDO PARA PASSO:', stepNumber);
@@ -267,7 +258,9 @@ function goToStep(stepNumber) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// Carregar horários disponíveis
+// ==============================
+// Carregar horários disponíveis (Passo 2)
+// ==============================
 async function loadHorarios() {
     console.log('🔍 ========== LOAD HORÁRIOS INICIADO ==========');
     console.log('Data no state:', state.selectedDate);
@@ -358,7 +351,9 @@ async function loadHorarios() {
     console.log('🔍 ========== LOAD HORÁRIOS FINALIZADO ==========');
 }
 
+// ==============================
 // Validar e processar passo 3
+// ==============================
 function handleStep3() {
     const form = document.getElementById('formDadosPaciente');
     
@@ -398,7 +393,9 @@ function handleStep3() {
     goToStep(4);
 }
 
+// ==============================
 // Configurar opções de parcelamento
+// ==============================
 function configurarParcelamento() {
     console.log('⚙️ Configurando parcelamento para tipo:', state.tipoSessao);
     
@@ -441,7 +438,9 @@ function configurarParcelamento() {
     }
 }
 
+// ==============================
 // Atualizar detalhes do parcelamento
+// ==============================
 function atualizarDetalheParcelas() {
     const tipoSessao = state.tipoSessao;
     const parcelas = state.parcelas;
@@ -479,7 +478,9 @@ function atualizarDetalheParcelas() {
     }
 }
 
+// ==============================
 // Obter dia da semana por extenso
+// ==============================
 function obterDiaSemana(data) {
     if (!data) return 'dia da semana';
     
@@ -487,7 +488,9 @@ function obterDiaSemana(data) {
     return dias[data.getDay()];
 }
 
+// ==============================
 // Mostrar resumo do agendamento
+// ==============================
 function mostrarResumo() {
     console.log('📋 ========== MOSTRANDO RESUMO ==========');
     console.log('Estado completo:', JSON.parse(JSON.stringify(state)));
@@ -519,7 +522,9 @@ function mostrarResumo() {
     document.getElementById('resumoValor').textContent = valorSessao;
 }
 
-// Finalizar agendamento
+// ==============================
+// Finalizar agendamento (criação + pagamento)
+// ==============================
 async function finalizarAgendamento() {
     const btnFinalizar = document.getElementById('btnFinalizarAgendamento');
     btnFinalizar.disabled = true;

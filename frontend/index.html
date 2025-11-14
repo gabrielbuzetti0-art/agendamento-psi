@@ -46,9 +46,30 @@
                 <h2>Escolha a Data da Sessão</h2>
                 <p class="step-description">Selecione uma data disponível no calendário abaixo:</p>
                 
-                <div class="calendar-container">
-                    <input type="text" id="datepicker" placeholder="Clique para selecionar a data">
-                </div>
+               <div class="calendar-container">
+    <input 
+        type="text" 
+        id="datepicker" 
+        placeholder="Clique para selecionar a data"
+    >
+
+    <!-- Legenda das cores do calendário -->
+    <div id="legendaCalendario" class="legenda-calendario">
+        <span>
+            <span class="legenda cor-full"></span>
+            Dia com todos os horários disponíveis
+        </span>
+        <span>
+            <span class="legenda cor-partial"></span>
+            Dia com horários parcialmente disponíveis
+        </span>
+        <span>
+            <span class="legenda cor-none"></span>
+            Dia sem horários disponíveis
+        </span>
+    </div>
+</div>
+
 
                 <!-- Escolha do Tipo de Sessão -->
                 <div class="tipo-sessao-container">

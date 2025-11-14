@@ -18,7 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initCEPSearch();
 });
 
-// Inicializar calendário
 function initCalendar() {
     const datepicker = flatpickr("#datepicker", {
         locale: "pt",
@@ -26,18 +25,75 @@ function initCalendar() {
         dateFormat: "d/m/Y",
         disable: [
             function(date) {
+                // Ainda bloqueia sábado (6) e domingo (0)
                 return (date.getDay() === 0 || date.getDay() === 6);
             }
         ],
         onChange: function(selectedDates, dateStr, instance) {
-            if (selectedDates.length > 0) {
-                state.selectedDate = selectedDates[0];
-                document.getElementById('btnNextStep1').disabled = false;
-                console.log('✅ Data selecionada:', state.selectedDate);
+            const btnNext = document.getElementById('btnNextStep1');
+
+            if (!selectedDates.length) {
+                state.selectedDate = null;
+                btnNext.disabled = true;
+                return;
             }
+
+            const selected = selectedDates[0];
+
+            const year = selected.getFullYear();
+            const month = String(selected.getMonth() + 1).padStart(2, '0');
+            const day = String(selected.getDate()).padStart(2, '0');
+            const key = `${year}-${month}-${day}`;
+
+            // Se for dia vermelho (none), não deixa avançar
+            if (calendarAvailability[key] && calendarAvailability[key].status === 'none') {
+                alert('Não há horários disponíveis nesta data. Por favor, escolha outro dia.');
+                instance.clear();
+                state.selectedDate = null;
+                btnNext.disabled = true;
+                return;
+            }
+
+            state.selectedDate = selected;
+            btnNext.disabled = false;
+            console.log('✅ Data selecionada:', state.selectedDate);
+        },
+        onDayCreate: function(dObj, dStr, fp, dayElem) {
+            const d = dayElem.dateObj;
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const key = `${year}-${month}-${day}`;
+
+            if (!calendarAvailability || !calendarAvailability[key]) {
+                return;
+            }
+
+            // Remove classes antigas
+            dayElem.classList.remove('dia-full', 'dia-partial', 'dia-none');
+
+            const status = calendarAvailability[key].status;
+            if (status === 'full') {
+                dayElem.classList.add('dia-full');
+            } else if (status === 'partial') {
+                dayElem.classList.add('dia-partial');
+            } else if (status === 'none') {
+                dayElem.classList.add('dia-none');
+            }
+        },
+        onMonthChange: function(selectedDates, dateStr, instance) {
+            const currentYear = instance.currentYear;
+            const currentMonth = instance.currentMonth + 1; // 0-based -> 1-12
+            carregarDisponibilidadeMes(instance, currentYear, currentMonth);
+        },
+        onReady: function(selectedDates, dateStr, instance) {
+            const currentYear = instance.currentYear;
+            const currentMonth = instance.currentMonth + 1;
+            carregarDisponibilidadeMes(instance, currentYear, currentMonth);
         }
     });
 }
+
 
 // Inicializar event listeners
 function initEventListeners() {

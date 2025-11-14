@@ -752,3 +752,61 @@ body {
     font-style: normal;
     color: #6c5200;
 }
+/* Cores dos dias no calendário */
+.flatpickr-day.dia-full {
+    background: #38a169 !important;   /* verde */
+    color: #ffffff !important;
+    border-radius: 50%;
+}
+
+.flatpickr-day.dia-partial {
+    background: #d69e2e !important;   /* amarelo */
+    color: #ffffff !important;
+    border-radius: 50%;
+}
+
+.flatpickr-day.dia-none {
+    background: #e53e3e !important;   /* vermelho */
+    color: #ffffff !important;
+    border-radius: 50%;
+}
+
+/* Mantém cor no hover/focus */
+.flatpickr-day.dia-full:hover,
+.flatpickr-day.dia-full:focus,
+.flatpickr-day.dia-partial:hover,
+.flatpickr-day.dia-partial:focus,
+.flatpickr-day.dia-none:hover,
+.flatpickr-day.dia-none:focus {
+    color: #ffffff !important;
+    opacity: 0.9;
+}
+
+
+.legenda-calendario {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+}
+
+.legenda-calendario .legenda {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    margin-right: 6px;
+}
+
+.legenda-calendario .cor-full {
+    background: #38a169;
+}
+
+.legenda-calendario .cor-partial {
+    background: #d69e2e;
+}
+
+.legenda-calendario .cor-none {
+    background: #e53e3e;
+}

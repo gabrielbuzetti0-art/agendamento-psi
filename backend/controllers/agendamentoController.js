@@ -372,6 +372,122 @@ exports.cancelarAgendamento = async (req, res) => {
     });
   }
 };
+// =========================
+// Disponibilidade geral para o calendário (por mês)
+// =========================
+exports.disponibilidadeCalendario = async (req, res) => {
+  try {
+    const { ano, mes } = req.query;
+
+    if (!ano || !mes) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parâmetros "ano" e "mes" são obrigatórios (ex: ano=2025&mes=11)'
+      });
+    }
+
+    const year = parseInt(ano, 10);
+    const month = parseInt(mes, 10); // 1 a 12
+
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parâmetros de ano ou mês inválidos.'
+      });
+    }
+
+    const horariosBase = ['18:00', '19:00', '20:30'];
+    const timeZone = 'America/Sao_Paulo';
+
+    // Primeiro dia do mês
+    const inicioPeriodo = new Date(year, month - 1, 1, 0, 0, 0, 0);
+    // Último dia do mês
+    const fimPeriodo = new Date(year, month, 0, 23, 59, 59, 999);
+
+    // Busca todos os agendamentos do mês
+    const agendamentosPeriodo = await Agendamento.find({
+      dataHora: { $gte: inicioPeriodo, $lte: fimPeriodo },
+      status: { $nin: ['cancelado'] }
+    });
+
+    // Mapa: "YYYY-MM-DD" -> Set de horários ocupados (18:00, 19:00, 20:30)
+    const mapaOcupacao = {};
+
+    agendamentosPeriodo.forEach((ag) => {
+      const d = new Date(ag.dataHora);
+
+      const dataKey = d.toLocaleDateString('en-CA', {
+        timeZone, // garante data local de São Paulo
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }); // formato: 2025-11-13
+
+      const horaStr = d.toLocaleTimeString('pt-BR', {
+        timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }); // "18:00", "19:00", etc.
+
+      if (!horariosBase.includes(horaStr)) {
+        return; // ignora horários que não são de atendimento padrão
+      }
+
+      if (!mapaOcupacao[dataKey]) {
+        mapaOcupacao[dataKey] = new Set();
+      }
+      mapaOcupacao[dataKey].add(horaStr);
+    });
+
+    // Monta resultado para cada dia do mês
+    const resultado = {};
+    const ultimoDiaMes = new Date(year, month, 0).getDate();
+
+    for (let dia = 1; dia <= ultimoDiaMes; dia++) {
+      const dataObj = new Date(year, month - 1, dia);
+      const weekday = dataObj.getDay(); // 0-dom, 6-sáb
+
+      const dataKey = `${year}-${String(month).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+
+      // Fins de semana já são desabilitados no flatpickr,
+      // mas vamos marcar como "none" por padrão.
+      const ocupadosSet = mapaOcupacao[dataKey] || new Set();
+      const ocupados = ocupadosSet.size;
+      const totalSlots = horariosBase.length;
+
+      let status;
+
+      if (weekday === 0 || weekday === 6) {
+        status = 'none'; // domingo/sábado
+      } else if (ocupados === 0) {
+        status = 'full'; // todos horários livres
+      } else if (ocupados >= totalSlots) {
+        status = 'none'; // nenhum horário livre
+      } else {
+        status = 'partial'; // pelo menos 1 horário livre
+      }
+
+      resultado[dataKey] = {
+        status,               // 'full' | 'partial' | 'none'
+        ocupados,
+        livres: Math.max(totalSlots - ocupados, 0)
+      };
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: resultado
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar disponibilidade do calendário:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar disponibilidade do calendário',
+      error: error.message
+    });
+  }
+};
 
 // =========================
 // Buscar horários disponíveis (Etapa 2)
