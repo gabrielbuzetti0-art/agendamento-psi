@@ -1,6 +1,8 @@
-// ==============================
-// Estado da aplicação
-// ==============================
+// js/agendamento.js (RAIZ)
+
+// =======================
+// ESTADO GLOBAL
+// =======================
 let state = {
     currentStep: 1,
     selectedDate: null,
@@ -11,15 +13,33 @@ let state = {
     parcelas: 1
 };
 
-let calendarAvailability = {}; // { 'YYYY-MM-DD': { status: 'full'|'partial'|'none', ... } }
+// Disponibilidade por dia para colorir o calendário
+// Exemplo esperado do backend:
+// { "2025-11-14": { status: "full" | "partial" | "none" , ... }, ... }
+let calendarAvailability = {};
 
-// ==============================
+// =======================
+// INICIALIZAÇÃO
+// =======================
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Sistema iniciado (frontend raiz)');
+    initCalendar();
+    initEventListeners();
+    initMasks();
+    initCEPSearch();
+});
+
+// =======================
+// CALENDÁRIO
+// =======================
+
 // Carregar disponibilidade do mês para o calendário
-// ==============================
 async function carregarDisponibilidadeMes(instance, ano, mes) {
     try {
         console.log('📅 Carregando disponibilidade do mês:', ano, mes);
+
         const response = await agendamentoAPI.disponibilidadeCalendario(ano, mes);
+        console.log('📥 Resposta disponibilidadeCalendario:', response);
 
         if (!response || !response.data) {
             console.error('❌ Resposta inválida em disponibilidadeCalendario:', response);
@@ -28,10 +48,11 @@ async function carregarDisponibilidadeMes(instance, ano, mes) {
             return;
         }
 
+        // response.data deve ser um objeto: { "YYYY-MM-DD": { status: "full"|"partial"|"none", ... }, ... }
         calendarAvailability = response.data;
-        console.log('✅ Disponibilidade do calendário carregada:', calendarAvailability);
+        console.log('✅ calendarAvailability atualizada:', calendarAvailability);
 
-        // Redesenha os dias (chama onDayCreate de novo)
+        // Redesenha os dias (dispara onDayCreate de novo)
         instance.redraw();
     } catch (error) {
         console.error('❌ Erro ao carregar disponibilidade do mês:', error);
@@ -40,17 +61,14 @@ async function carregarDisponibilidadeMes(instance, ano, mes) {
     }
 }
 
-// ==============================
-// Inicializar calendário (com cores e bloqueio de dias sem horário)
-// ==============================
 function initCalendar() {
-    flatpickr("#datepicker", {
+    const datepicker = flatpickr("#datepicker", {
         locale: "pt",
         minDate: "today",
         dateFormat: "d/m/Y",
         disable: [
             function(date) {
-                // Desabilita domingos e sábados
+                // Bloqueia sábado (6) e domingo (0)
                 return (date.getDay() === 0 || date.getDay() === 6);
             }
         ],
@@ -73,8 +91,7 @@ function initCalendar() {
             carregarDisponibilidadeMes(instance, ano, mes);
         },
         onDayCreate: function(dObj, dStr, instance, dayElem) {
-            // ⚠️ Usar o dObj (Date) direto, é mais seguro que dayElem.dateObj
-            const dateObj = dObj;
+            const dateObj = dayElem.dateObj;
             const year = dateObj.getFullYear();
             const month = String(dateObj.getMonth() + 1).padStart(2, '0');
             const day = String(dateObj.getDate()).padStart(2, '0');
@@ -95,41 +112,41 @@ function initCalendar() {
             }
         },
         onChange: function(selectedDates, dateStr, instance) {
-            if (selectedDates.length > 0) {
-                const dataISO = utils.formatarDataISO(selectedDates[0]); // YYYY-MM-DD
-                const info = calendarAvailability[dataISO];
+            const btnNext = document.getElementById('btnNextStep1');
 
-                // Se dia estiver marcado como "none", não deixa avançar
-                if (info && info.status === 'none') {
-                    alert('Não há horários disponíveis para esta data. Por favor, escolha outro dia.');
-                    state.selectedDate = null;
-                    document.getElementById('btnNextStep1').disabled = true;
-                    instance.clear();
-                    return;
-                }
-
-                state.selectedDate = selectedDates[0];
-                document.getElementById('btnNextStep1').disabled = false;
-                console.log('✅ Data selecionada:', state.selectedDate, 'info:', info);
+            if (!selectedDates.length) {
+                state.selectedDate = null;
+                btnNext.disabled = true;
+                return;
             }
+
+            const selected = selectedDates[0];
+            const year = selected.getFullYear();
+            const month = String(selected.getMonth() + 1).padStart(2, '0');
+            const day = String(selected.getDate()).padStart(2, '0');
+            const key = `${year}-${month}-${day}`;
+
+            const info = calendarAvailability[key];
+
+            // Se for dia vermelho (none), não deixa avançar
+            if (info && info.status === 'none') {
+                alert('Não há horários disponíveis nesta data. Por favor, escolha outro dia.');
+                instance.clear();
+                state.selectedDate = null;
+                btnNext.disabled = true;
+                return;
+            }
+
+            state.selectedDate = selected;
+            btnNext.disabled = false;
+            console.log('✅ Data selecionada:', state.selectedDate, 'info:', info);
         }
     });
 }
 
-// ==============================
-// Inicialização geral
-// ==============================
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Sistema iniciado');
-    initCalendar();
-    initEventListeners();
-    initMasks();
-    initCEPSearch();
-});
-
-// ==============================
-// Inicializar event listeners
-// ==============================
+// =======================
+// EVENT LISTENERS
+// =======================
 function initEventListeners() {
     document.getElementById('btnNextStep1').addEventListener('click', () => {
         console.log('▶️ Passo 1 → 2');
@@ -157,7 +174,7 @@ function initEventListeners() {
                 alertaHorarioFixo.style.display = 'none';
             }
 
-            // Se já estiver no passo de horários, recarrega com a nova regra
+            // Se já estiver no passo 2 e já tiver data, recarrega horários
             if (state.currentStep === 2 && state.selectedDate) {
                 console.log('🔄 Tipo de sessão alterado no passo 2, recarregando horários...');
                 loadHorarios();
@@ -174,9 +191,9 @@ function initEventListeners() {
     }
 }
 
-// ==============================
-// Máscaras de input
-// ==============================
+// =======================
+// MÁSCARAS
+// =======================
 function initMasks() {
     const telefoneInput = document.getElementById('telefone');
     const cpfInput = document.getElementById('cpf');
@@ -195,9 +212,9 @@ function initMasks() {
     });
 }
 
-// ==============================
-// Busca de CEP
-// ==============================
+// =======================
+// BUSCA CEP
+// =======================
 function initCEPSearch() {
     const cepInput = document.getElementById('cep');
     
@@ -219,9 +236,9 @@ function initCEPSearch() {
     });
 }
 
-// ==============================
-// Navegar entre passos
-// ==============================
+// =======================
+// NAVEGAR ENTRE PASSOS
+// =======================
 function goToStep(stepNumber) {
     console.log('===================================');
     console.log('📍 NAVEGANDO PARA PASSO:', stepNumber);
@@ -258,9 +275,9 @@ function goToStep(stepNumber) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ==============================
-// Carregar horários disponíveis (Passo 2)
-// ==============================
+// =======================
+// CARREGAR HORÁRIOS
+// =======================
 async function loadHorarios() {
     console.log('🔍 ========== LOAD HORÁRIOS INICIADO ==========');
     console.log('Data no state:', state.selectedDate);
@@ -284,15 +301,15 @@ async function loadHorarios() {
 
     try {
         const dataISO = utils.formatarDataISO(state.selectedDate);
-        console.log('📤 Fazendo requisição para:', dataISO, 'tipo:', state.tipoSessao);
+        console.log('📤 Fazendo requisição para horários:', dataISO, 'tipo:', state.tipoSessao);
         
+        // IMPORTANTE: aqui enviamos também o tipoSessao
         const response = await agendamentoAPI.buscarHorariosDisponiveis(dataISO, state.tipoSessao);
         
-        console.log('📥 Resposta recebida:', response);
+        console.log('📥 Resposta recebida de buscarHorariosDisponiveis:', response);
 
         loadingHorarios.style.display = 'none';
 
-        // VERIFICAÇÃO CRÍTICA
         if (!response || !response.data || !response.data.horariosDisponiveis) {
             console.error('❌ Resposta inválida:', response);
             horariosGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #dc3545;">Erro: Resposta inválida da API.</p>';
@@ -302,23 +319,16 @@ async function loadHorarios() {
         const horariosDisponiveis = response.data.horariosDisponiveis;
         
         console.log('✅ Horários disponíveis recebidos:', horariosDisponiveis);
-        console.log('✅ Tipo:', typeof horariosDisponiveis);
-        console.log('✅ É array?', Array.isArray(horariosDisponiveis));
-        console.log('✅ Length:', horariosDisponiveis.length);
+        console.log('✅ É array?', Array.isArray(horariosDisponiveis), 'Length:', horariosDisponiveis.length);
 
         if (!Array.isArray(horariosDisponiveis) || horariosDisponiveis.length === 0) {
             horariosGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #999;">Não há horários disponíveis para esta data.</p>';
             return;
         }
 
-        // LIMPAR O GRID ANTES DE ADICIONAR
         horariosGrid.innerHTML = '';
         
-        console.log('🔨 Criando elementos de horário...');
-
         horariosDisponiveis.forEach((horario, index) => {
-            console.log(`  Criando horário ${index + 1}:`, horario);
-            
             const horarioElement = document.createElement('div');
             horarioElement.className = 'horario-item';
             horarioElement.textContent = horario;
@@ -336,13 +346,12 @@ async function loadHorarios() {
             });
 
             horariosGrid.appendChild(horarioElement);
-            console.log('  ✓ Horário adicionado ao DOM');
         });
         
         console.log('✅ Total de horários renderizados:', horariosGrid.children.length);
 
     } catch (error) {
-        console.error('❌ ERRO NO CATCH:', error);
+        console.error('❌ ERRO NO CATCH de loadHorarios:', error);
         console.error('Stack:', error.stack);
         loadingHorarios.style.display = 'none';
         horariosGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #dc3545;">Erro ao carregar horários. Detalhes: ' + error.message + '</p>';
@@ -351,9 +360,9 @@ async function loadHorarios() {
     console.log('🔍 ========== LOAD HORÁRIOS FINALIZADO ==========');
 }
 
-// ==============================
-// Validar e processar passo 3
-// ==============================
+// =======================
+// PASSO 3 – DADOS DO PACIENTE
+// =======================
 function handleStep3() {
     const form = document.getElementById('formDadosPaciente');
     
@@ -393,9 +402,9 @@ function handleStep3() {
     goToStep(4);
 }
 
-// ==============================
-// Configurar opções de parcelamento
-// ==============================
+// =======================
+// PARCELAMENTO
+// =======================
 function configurarParcelamento() {
     console.log('⚙️ Configurando parcelamento para tipo:', state.tipoSessao);
     
@@ -405,7 +414,6 @@ function configurarParcelamento() {
     
     if (tipoSessao === 'pacote_mensal' || tipoSessao === 'pacote_anual') {
         parcelamentoContainer.style.display = 'block';
-        
         selectParcelas.innerHTML = '';
         
         if (tipoSessao === 'pacote_mensal') {
@@ -438,9 +446,6 @@ function configurarParcelamento() {
     }
 }
 
-// ==============================
-// Atualizar detalhes do parcelamento
-// ==============================
 function atualizarDetalheParcelas() {
     const tipoSessao = state.tipoSessao;
     const parcelas = state.parcelas;
@@ -478,53 +483,46 @@ function atualizarDetalheParcelas() {
     }
 }
 
-// ==============================
-// Obter dia da semana por extenso
-// ==============================
 function obterDiaSemana(data) {
     if (!data) return 'dia da semana';
-    
     const dias = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
     return dias[data.getDay()];
 }
 
-// ==============================
-// Mostrar resumo do agendamento
-// ==============================
+// =======================
+// RESUMO (PASSO 4)
+// =======================
 function mostrarResumo() {
     console.log('📋 ========== MOSTRANDO RESUMO ==========');
     console.log('Estado completo:', JSON.parse(JSON.stringify(state)));
     
     const tipoSessao = state.tipoSessao;
-    
     let valorSessao, tipoTexto;
     
     if (tipoSessao === 'pacote_mensal') {
         valorSessao = 'R$ 480,00';
-        tipoTexto = 'Pacote Mensal (4 sessões)';
+        tipoTexto  = 'Pacote Mensal (4 sessões)';
     } else if (tipoSessao === 'pacote_anual') {
         valorSessao = 'R$ 5.760,00';
-        tipoTexto = 'Pacote Anual (48 sessões)';
+        tipoTexto  = 'Pacote Anual (48 sessões)';
     } else {
         valorSessao = 'R$ 150,00';
-        tipoTexto = 'Sessão Avulsa';
+        tipoTexto  = 'Sessão Avulsa';
     }
 
     const dataFormatada = state.selectedDate ? utils.formatarData(state.selectedDate) : 'Data não selecionada';
     
-    console.log('Resumo gerado:', { dataFormatada, horario: state.selectedTime, tipo: tipoTexto, valor: valorSessao });
-    
-    document.getElementById('resumoData').textContent = dataFormatada;
+    document.getElementById('resumoData').textContent   = dataFormatada;
     document.getElementById('resumoHorario').textContent = state.selectedTime || 'Horário não selecionado';
-    document.getElementById('resumoNome').textContent = state.pacienteData.nome;
-    document.getElementById('resumoEmail').textContent = state.pacienteData.email;
-    document.getElementById('resumoTipo').textContent = tipoTexto;
-    document.getElementById('resumoValor').textContent = valorSessao;
+    document.getElementById('resumoNome').textContent    = state.pacienteData.nome;
+    document.getElementById('resumoEmail').textContent   = state.pacienteData.email;
+    document.getElementById('resumoTipo').textContent    = tipoTexto;
+    document.getElementById('resumoValor').textContent   = valorSessao;
 }
 
-// ==============================
-// Finalizar agendamento (criação + pagamento)
-// ==============================
+// =======================
+// FINALIZAR AGENDAMENTO
+// =======================
 async function finalizarAgendamento() {
     const btnFinalizar = document.getElementById('btnFinalizarAgendamento');
     btnFinalizar.disabled = true;
@@ -541,15 +539,18 @@ async function finalizarAgendamento() {
     }
 
     try {
-        // 1. CRIAR/BUSCAR PACIENTE PRIMEIRO
+        // 1. CRIAR/BUSCAR PACIENTE
         let pacienteId;
+        
+        console.log('🔍 Buscando paciente por email:', state.pacienteData.email);
         
         try {
             const pacienteExistente = await pacienteAPI.buscarPorEmail(state.pacienteData.email);
             pacienteId = pacienteExistente.data._id;
             console.log('✅ Paciente existente encontrado:', pacienteId);
-        } catch (error) {
-            console.log('📝 Criando novo paciente...');
+        } catch (errorBusca) {
+            console.log('📝 Paciente não encontrado, criando novo...');
+            
             const novoPaciente = await pacienteAPI.criar({
                 nome: state.pacienteData.nome,
                 email: state.pacienteData.email,
@@ -572,18 +573,24 @@ async function finalizarAgendamento() {
             console.log('✅ Novo paciente criado:', pacienteId);
         }
 
+        if (!pacienteId) {
+            throw new Error('Erro: ID do paciente não foi obtido!');
+        }
+
         // 2. PREPARAR DATA E HORA
         const [hora, minuto] = state.selectedTime.split(':');
         const dataHora = new Date(state.selectedDate);
         dataHora.setHours(parseInt(hora), parseInt(minuto), 0, 0);
 
-        console.log('📤 Criando agendamento:', {
-            pacienteId,
+        console.log('📤 Criando agendamento com dados:', {
+            pacienteId: pacienteId,
             dataHora: dataHora.toISOString(),
-            tipo: state.tipoSessao
+            tipo: state.tipoSessao,
+            observacoes: state.pacienteData.observacoes || '',
+            parcelas: state.parcelas
         });
 
-        // 3. CRIAR AGENDAMENTO COM TODOS OS DADOS OBRIGATÓRIOS
+        // 3. CRIAR AGENDAMENTO
         const dadosAgendamento = {
             pacienteId: pacienteId,
             dataHora: dataHora.toISOString(),
@@ -591,22 +598,20 @@ async function finalizarAgendamento() {
             observacoes: state.pacienteData.observacoes || ''
         };
 
-        // Adicionar parcelas apenas se for pacote
         if (state.tipoSessao === 'pacote_mensal' || state.tipoSessao === 'pacote_anual') {
             dadosAgendamento.parcelas = state.parcelas;
         }
 
         const agendamento = await agendamentoAPI.criar(dadosAgendamento);
-
         console.log('✅ Agendamento criado:', agendamento);
 
         state.agendamentoId = agendamento.data._id;
 
-        // 4. PROCESSAR PAGAMENTO
+        // 4. PROCESSAR PAGAMENTO (por enquanto, só PIX simulado)
         const metodoPagamento = document.querySelector('input[name="metodoPagamento"]:checked').value;
 
         if (metodoPagamento === 'pix') {
-            console.log('💳 Processando pagamento PIX...');
+            console.log('💳 Processando pagamento PIX (simulado)...');
             await new Promise(resolve => setTimeout(resolve, 2000));
             
             await pagamentoAPI.confirmarManual({
@@ -616,7 +621,7 @@ async function finalizarAgendamento() {
             });
         }
 
-        // 5. MOSTRAR SUCESSO
+        // 5. TELA DE SUCESSO
         document.querySelectorAll('.step-content').forEach(content => {
             content.style.display = 'none';
         });
@@ -625,8 +630,7 @@ async function finalizarAgendamento() {
         console.log('🎉 AGENDAMENTO FINALIZADO COM SUCESSO!');
 
     } catch (error) {
-        console.error('❌ Erro completo:', error);
-        console.error('Stack:', error.stack);
+        console.error('❌ Erro ao finalizar agendamento:', error);
         alert('Erro ao finalizar agendamento: ' + error.message);
         btnFinalizar.disabled = false;
         btnFinalizar.textContent = '✓ Confirmar e Pagar';
