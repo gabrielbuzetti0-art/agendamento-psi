@@ -9,6 +9,33 @@ let state = {
     parcelas: 1
 };
 
+let calendarAvailability = {}; // { 'YYYY-MM-DD': { status: 'full'|'partial'|'none', ... } }
+
+// Carregar disponibilidade do mês para o calendário
+async function carregarDisponibilidadeMes(instance, ano, mes) {
+    try {
+        console.log('📅 Carregando disponibilidade do mês:', ano, mes);
+        const response = await agendamentoAPI.disponibilidadeCalendario(ano, mes);
+
+        if (!response || !response.data) {
+            console.error('❌ Resposta inválida em disponibilidadeCalendario:', response);
+            calendarAvailability = {};
+            instance.redraw();
+            return;
+        }
+
+        calendarAvailability = response.data;
+        console.log('✅ Disponibilidade do calendário carregada:', calendarAvailability);
+
+        // Redesenha os dias (chama onDayCreate de novo)
+        instance.redraw();
+    } catch (error) {
+        console.error('❌ Erro ao carregar disponibilidade do mês:', error);
+        calendarAvailability = {};
+        instance.redraw();
+    }
+}
+
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Sistema iniciado');
@@ -18,7 +45,33 @@ document.addEventListener('DOMContentLoaded', () => {
     initCEPSearch();
 });
 
-// Inicializar calendário
+
+// 🔹 Carregar disponibilidade do mês para o calendário
+async function carregarDisponibilidadeMes(instance, ano, mes) {
+    try {
+        console.log('📅 Carregando disponibilidade do mês:', ano, mes);
+        const response = await agendamentoAPI.disponibilidadeCalendario(ano, mes);
+
+        if (!response || !response.data) {
+            console.error('❌ Resposta inválida em disponibilidadeCalendario:', response);
+            calendarAvailability = {};
+            instance.redraw();
+            return;
+        }
+
+        calendarAvailability = response.data;
+        console.log('✅ Disponibilidade do calendário carregada:', calendarAvailability);
+
+        // Redesenha os dias (vai disparar onDayCreate de novo)
+        instance.redraw();
+    } catch (error) {
+        console.error('❌ Erro ao carregar disponibilidade do mês:', error);
+        calendarAvailability = {};
+        instance.redraw();
+    }
+}
+
+// Inicializar calendário (com cores e bloqueio de dias sem horário)
 function initCalendar() {
     const datepicker = flatpickr("#datepicker", {
         locale: "pt",
@@ -26,14 +79,66 @@ function initCalendar() {
         dateFormat: "d/m/Y",
         disable: [
             function(date) {
+                // Domingos e sábados já desabilitados
                 return (date.getDay() === 0 || date.getDay() === 6);
             }
         ],
+        onReady: function(selectedDates, dateStr, instance) {
+            console.log('📅 Flatpickr pronto');
+            const anoAtual = instance.currentYear;
+            const mesAtual = instance.currentMonth + 1; // 0-based → 1-12
+            carregarDisponibilidadeMes(instance, anoAtual, mesAtual);
+        },
+        onMonthChange: function(selectedDates, dateStr, instance) {
+            const ano = instance.currentYear;
+            const mes = instance.currentMonth + 1;
+            console.log('📅 Mês alterado:', ano, mes);
+            carregarDisponibilidadeMes(instance, ano, mes);
+        },
+        onYearChange: function(selectedDates, dateStr, instance) {
+            const ano = instance.currentYear;
+            const mes = instance.currentMonth + 1;
+            console.log('📅 Ano alterado:', ano, mes);
+            carregarDisponibilidadeMes(instance, ano, mes);
+        },
+        onDayCreate: function(dObj, dStr, instance, dayElem) {
+            const dateObj = dayElem.dateObj;
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const key = `${year}-${month}-${day}`;
+
+            const info = calendarAvailability[key];
+            if (!info) return;
+
+            // Remove classes antigas
+            dayElem.classList.remove('dia-full', 'dia-partial', 'dia-none');
+
+            if (info.status === 'full') {
+                dayElem.classList.add('dia-full');      // verde
+            } else if (info.status === 'partial') {
+                dayElem.classList.add('dia-partial');   // amarelo
+            } else if (info.status === 'none') {
+                dayElem.classList.add('dia-none');      // vermelho
+            }
+        },
         onChange: function(selectedDates, dateStr, instance) {
             if (selectedDates.length > 0) {
+                const dataISO = utils.formatarDataISO(selectedDates[0]); // YYYY-MM-DD
+                const info = calendarAvailability[dataISO];
+
+                // Se dia estiver marcado como "none", não deixa avançar
+                if (info && info.status === 'none') {
+                    alert('Não há horários disponíveis para esta data. Por favor, escolha outro dia.');
+                    state.selectedDate = null;
+                    document.getElementById('btnNextStep1').disabled = true;
+                    instance.clear();
+                    return;
+                }
+
                 state.selectedDate = selectedDates[0];
                 document.getElementById('btnNextStep1').disabled = false;
-                console.log('✅ Data selecionada:', state.selectedDate);
+                console.log('✅ Data selecionada:', state.selectedDate, 'info:', info);
             }
         }
     });
@@ -54,26 +159,26 @@ function initEventListeners() {
     document.getElementById('btnBackStep4').addEventListener('click', () => goToStep(3));
     document.getElementById('btnFinalizarAgendamento').addEventListener('click', finalizarAgendamento);
 
+    // Listener para mudança de tipo de sessão
     document.querySelectorAll('input[name="tipoSessao"]').forEach(radio => {
-    radio.addEventListener('change', (e) => {
-        state.tipoSessao = e.target.value;
-        console.log('✅ Tipo ALTERADO para:', state.tipoSessao);
-        
-        const alertaHorarioFixo = document.getElementById('alertaHorarioFixo');
-        if (e.target.value === 'pacote_mensal' || e.target.value === 'pacote_anual') {
-            alertaHorarioFixo.style.display = 'flex';
-        } else {
-            alertaHorarioFixo.style.display = 'none';
-        }
+        radio.addEventListener('change', (e) => {
+            state.tipoSessao = e.target.value;
+            console.log('✅ Tipo ALTERADO para:', state.tipoSessao);
+            
+            const alertaHorarioFixo = document.getElementById('alertaHorarioFixo');
+            if (e.target.value === 'pacote_mensal' || e.target.value === 'pacote_anual') {
+                alertaHorarioFixo.style.display = 'flex';
+            } else {
+                alertaHorarioFixo.style.display = 'none';
+            }
 
-        // Se já estiver no passo de horários, recarrega com a nova regra
-        if (state.currentStep === 2 && state.selectedDate) {
-            console.log('🔄 Tipo de sessão alterado no passo 2, recarregando horários...');
-            loadHorarios();
-        }
+            // Se já estiver no passo de horários, recarrega com a nova regra
+            if (state.currentStep === 2 && state.selectedDate) {
+                console.log('🔄 Tipo de sessão alterado no passo 2, recarregando horários...');
+                loadHorarios();
+            }
+        });
     });
-});
-
 
     const selectParcelas = document.getElementById('selectParcelas');
     if (selectParcelas) {
@@ -186,16 +291,11 @@ async function loadHorarios() {
 
     try {
         const dataISO = utils.formatarDataISO(state.selectedDate);
-        console.log('📤 Fazendo requisição para:', dataISO);
+        console.log('📤 Fazendo requisição para:', dataISO, 'tipo:', state.tipoSessao);
         
         const response = await agendamentoAPI.buscarHorariosDisponiveis(dataISO, state.tipoSessao);
-
         
         console.log('📥 Resposta recebida:', response);
-
-        loadingHorarios.style.display = 'none';
-
-       console.log('📥 Resposta recebida:', response);
 
         loadingHorarios.style.display = 'none';
 

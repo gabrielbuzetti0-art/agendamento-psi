@@ -72,19 +72,25 @@ const agendamentoAPI = {
         return fetchAPI(`/agendamentos${sufixo}`);
     },
 
-   // Buscar horários disponíveis para uma data (usado na Etapa 2)
-buscarHorariosDisponiveis: (dataISO, tipoSessao) => {
-    console.log('🔗 API: Buscando horários disponíveis para data:', dataISO, 'tipo:', tipoSessao);
+    // Buscar horários disponíveis para uma data (usado na Etapa 2)
+    buscarHorariosDisponiveis: (dataISO, tipoSessao) => {
+        console.log('🔗 API: Buscando horários disponíveis para data:', dataISO, 'tipo:', tipoSessao);
+        const params = new URLSearchParams({
+            data: dataISO,
+            tipo: tipoSessao || 'avulsa'
+        });
+        return fetchAPI(`/agendamentos/horarios-disponiveis?${params.toString()}`);
+    },
 
-    const params = new URLSearchParams();
-    params.append('data', dataISO);
-    if (tipoSessao) {
-        params.append('tipo', tipoSessao);
-    }
-
-    return fetchAPI(`/agendamentos/horarios-disponiveis?${params.toString()}`);
-},
-
+    // 🔥 NOVO: disponibilidade por mês para pintar o calendário
+    disponibilidadeCalendario: (ano, mes) => {
+        console.log('🔗 API: Buscando disponibilidade do calendário para:', ano, mes);
+        const params = new URLSearchParams({
+            ano: String(ano),
+            mes: String(mes)
+        });
+        return fetchAPI(`/agendamentos/disponibilidade-calendario?${params.toString()}`);
+    },
 
     // Buscar agendamento por ID
     buscarPorId: (id) => fetchAPI(`/agendamentos/${id}`),
@@ -101,6 +107,7 @@ buscarHorariosDisponiveis: (dataISO, tipoSessao) => {
         body: JSON.stringify(dados)
     })
 };
+
 
 // ==============================
 // API de Pacientes

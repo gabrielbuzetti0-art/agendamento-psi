@@ -4,7 +4,10 @@ const agendamentoController = require('../controllers/agendamentoController');
 
 // IMPORTANTE: Rotas específicas ANTES de rotas com parâmetros dinâmicos!
 
-// Buscar horários disponíveis (DEVE VIR PRIMEIRO!)
+// Disponibilidade geral para o calendário (por mês)
+router.get('/disponibilidade-calendario', agendamentoController.disponibilidadeCalendario);
+
+// Buscar horários disponíveis (Etapa 2)
 router.get('/horarios-disponiveis', agendamentoController.buscarHorariosDisponiveis);
 
 // Listar agendamentos
