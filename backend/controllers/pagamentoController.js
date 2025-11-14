@@ -9,7 +9,7 @@ let mpPreference = null;
   try {
     const { MercadoPagoConfig, Preference } = mercadopago;
     const client = new MercadoPagoConfig({
-      accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN, // ✅ CORRIGIDO
+      accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN,
     });
     mpPreference = new Preference(client);
     console.log('✅ Mercado Pago inicializado com sucesso!');
@@ -31,26 +31,26 @@ function toNumber(n, fallback = 0) {
 async function criarPreferenciaPagamento(req, res, next) {
   try {
     if (!mpPreference) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        message: 'Mercado Pago não configurado.' 
+        message: 'Mercado Pago não configurado.',
       });
     }
 
     const { agendamentoId } = req.body || {};
     if (!agendamentoId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'agendamentoId é obrigatório.' 
+        message: 'agendamentoId é obrigatório.',
       });
     }
 
     // Buscar o agendamento
     const ag = await Agendamento.findById(agendamentoId).populate('paciente');
     if (!ag) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Agendamento não encontrado.' 
+        message: 'Agendamento não encontrado.',
       });
     }
 
@@ -63,6 +63,8 @@ async function criarPreferenciaPagamento(req, res, next) {
     } else if (ag.tipo === 'pacote_anual') {
       descricao = 'Pacote Anual - 48 sessões de Psicologia';
     }
+
+    const baseUrl = 'https://psicarolmarques.com.br/agendamento';
 
     const body = {
       items: [
@@ -79,9 +81,10 @@ async function criarPreferenciaPagamento(req, res, next) {
         email: ag.paciente?.email || 'email@exemplo.com',
       },
       back_urls: {
-        success: `https://psicarolmarques.com.br/agendamento/sucesso?id=${agendamentoId}`,
-        pending: `https://psicarolmarques.com.br/agendamento/pendente?id=${agendamentoId}`,
-        failure: `https://psicarolmarques.com.br/agendamento/erro?id=${agendamentoId}`,
+        // Todas voltam pra mesma página, mudando só os parâmetros
+        success: `${baseUrl}/?status=approved&agendamentoId=${agendamentoId}`,
+        pending: `${baseUrl}/?status=pending&agendamentoId=${agendamentoId}`,
+        failure: `${baseUrl}/?status=failure&agendamentoId=${agendamentoId}`,
       },
       auto_return: 'approved',
       notification_url: process.env.MP_WEBHOOK_URL || undefined,
@@ -100,8 +103,8 @@ async function criarPreferenciaPagamento(req, res, next) {
     return res.status(201).json({
       success: true,
       preferenceId: pref?.id,
-      init_point: pref?.init_point, // Link para produção
-      sandbox_init_point: pref?.sandbox_init_point, // Link para teste
+      init_point: pref?.init_point,           // link produção
+      sandbox_init_point: pref?.sandbox_init_point, // link sandbox (se usar)
     });
   } catch (err) {
     console.error('❌ Erro ao criar preferência:', err);
@@ -121,13 +124,10 @@ async function webhookMercadoPago(req, res, next) {
     // Responder imediatamente
     res.status(200).json({ received: true });
 
-    // Processar o webhook
+    // Aqui você pode processar o webhook depois (consultar pagamento, etc.)
     if (payload.type === 'payment' && payload.data?.id) {
-      // Em produção, você consultaria a API do MP para pegar detalhes do pagamento
-      // Por enquanto, vamos marcar como pago quando vier approved
       console.log('💳 Pagamento recebido, ID:', payload.data.id);
     }
-
   } catch (err) {
     console.error('❌ Erro no webhook:', err);
     next(err);
@@ -141,19 +141,19 @@ async function webhookMercadoPago(req, res, next) {
 async function confirmarPagamentoManual(req, res, next) {
   try {
     const { agendamentoId, metodo = 'pix', comprovante } = req.body || {};
-    
+
     if (!agendamentoId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'agendamentoId é obrigatório.' 
+        message: 'agendamentoId é obrigatório.',
       });
     }
 
     const ag = await Agendamento.findById(agendamentoId).populate('paciente');
     if (!ag) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Agendamento não encontrado.' 
+        message: 'Agendamento não encontrado.',
       });
     }
 
@@ -172,13 +172,13 @@ async function confirmarPagamentoManual(req, res, next) {
       console.warn('⚠️ Falha ao enviar e-mail de confirmação:', e?.message);
     }
 
-    return res.json({ 
+    return res.json({
       success: true,
       message: 'Pagamento confirmado com sucesso!',
       data: {
         agendamentoId: ag._id,
-        statusPagamento: ag.statusPagamento
-      }
+        statusPagamento: ag.statusPagamento,
+      },
     });
   } catch (err) {
     console.error('❌ Erro ao confirmar pagamento:', err);
@@ -193,11 +193,11 @@ async function buscarStatusPagamento(req, res, next) {
   try {
     const { agendamentoId } = req.params;
     const ag = await Agendamento.findById(agendamentoId).lean();
-    
+
     if (!ag) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Agendamento não encontrado.' 
+        message: 'Agendamento não encontrado.',
       });
     }
 
@@ -209,7 +209,7 @@ async function buscarStatusPagamento(req, res, next) {
         metodoPagamento: ag.metodoPagamento || null,
         preferenciaId: ag.preferenciaId || null,
         dataPagamento: ag.dataPagamento || null,
-      }
+      },
     });
   } catch (err) {
     next(err);
