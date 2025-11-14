@@ -752,3 +752,147 @@ body {
     font-style: normal;
     color: #6c5200;
 }
+/* ====== CORES DOS DIAS NO CALENDÁRIO (FLATPICKR) ====== */
+.flatpickr-day.dia-full {
+    background: #38a169;   /* verde - dia com todos horários */
+    color: #fff;
+}
+
+.flatpickr-day.dia-partial {
+    background: #d69e2e;   /* amarelo - dia com horários parciais */
+    color: #fff;
+}
+
+.flatpickr-day.dia-none {
+    background: #e53e3e;   /* vermelho - dia sem horário */
+    color: #fff;
+}
+
+/* Mantém o texto branco mesmo ao passar o mouse */
+.flatpickr-day.dia-full:hover,
+.flatpickr-day.dia-full:focus,
+.flatpickr-day.dia-partial:hover,
+.flatpickr-day.dia-partial:focus,
+.flatpickr-day.dia-none:hover,
+.flatpickr-day.dia-none:focus {
+    color: #fff;
+    opacity: 0.9;
+}
+
+/* ====== LEGENDA DO CALENDÁRIO ====== */
+.legenda-calendario {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.legenda-calendario span {
+    display: flex;
+    align-items: center;
+}
+
+.legenda-calendario .legenda {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    margin-right: 6px;
+}
+
+.legenda-calendario .cor-full {
+    background: #38a169;
+}
+
+.legenda-calendario .cor-partial {
+    background: #d69e2e;
+}
+
+.legenda-calendario .cor-none {
+    background: #e53e3e;
+}
+
+/* ====== AJUSTE DOS BOTÕES DE HORÁRIO (maiores e mais "clicados") ====== */
+.horarios-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* aumenta um pouco */
+}
+
+.horario-item {
+    padding: 18px;              /* maior que os 15px de antes */
+    font-size: 1rem;
+}
+
+.horario-item.selected {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+}
+/* Calendário - cores por disponibilidade */
+.flatpickr-day.dia-full {
+    background: rgba(40, 167, 69, 0.15);
+    border-color: #28a745;
+    color: #155724;
+}
+
+.flatpickr-day.dia-full:hover {
+    background: rgba(40, 167, 69, 0.25);
+}
+
+.flatpickr-day.dia-partial {
+    background: rgba(255, 193, 7, 0.15);
+    border-color: #ffc107;
+    color: #856404;
+}
+
+.flatpickr-day.dia-partial:hover {
+    background: rgba(255, 193, 7, 0.25);
+}
+
+.flatpickr-day.dia-none {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: #dc3545;
+    color: #721c24;
+}
+
+.flatpickr-day.dia-none:hover {
+    background: rgba(220, 53, 69, 0.25);
+}
+
+/* Legenda do calendário */
+.legenda-calendario {
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: var(--text-light);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.legenda-calendario span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legenda-calendario .legenda {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.legenda-calendario .cor-full {
+    background: #28a745;
+}
+
+.legenda-calendario .cor-partial {
+    background: #ffc107;
+}
+
+.legenda-calendario .cor-none {
+    background: #dc3545;
+}

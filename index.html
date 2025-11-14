@@ -41,91 +41,92 @@
         <!-- Conteúdo Principal -->
         <main class="main-content">
             
-           <!-- PASSO 1: Escolher Data -->
-<div class="step-content active" id="step1">
-    <h2>Escolha a Data da Sessão</h2>
-    <p class="step-description">Selecione uma data disponível no calendário abaixo:</p>
-    
-    <div class="calendar-container">
-        <input 
-            type="text" 
-            id="datepicker" 
-            placeholder="Clique para selecionar a data"
-        >
+            <!-- PASSO 1: Escolher Data -->
+            <div class="step-content active" id="step1">
+                <h2>Escolha a Data da Sessão</h2>
+                <p class="step-description">Selecione uma data disponível no calendário abaixo:</p>
+                
+                <div class="calendar-container">
+                    <input 
+                        type="text" 
+                        id="datepicker" 
+                        placeholder="Clique para selecionar a data"
+                    >
 
-        <!-- Legenda das cores do calendário -->
-        <div id="legendaCalendario" class="legenda-calendario">
-            <span>
-                <span class="legenda cor-full"></span>
-                Dia com todos os horários disponíveis
-            </span>
-            <span>
-                <span class="legenda cor-partial"></span>
-                Dia com horários parcialmente disponíveis
-            </span>
-            <span>
-                <span class="legenda cor-none"></span>
-                Dia sem horários disponíveis
-            </span>
-        </div>
-    </div>
+                    <!-- Legenda das cores do calendário -->
+                    <div id="legendaCalendario" class="legenda-calendario">
+                        <span>
+                            <span class="legenda cor-full"></span>
+                            Dia com todos os horários disponíveis
+                        </span>
+                        <span>
+                            <span class="legenda cor-partial"></span>
+                            Dia com horários parcialmente disponíveis
+                        </span>
+                        <span>
+                            <span class="legenda cor-none"></span>
+                            Dia sem horários disponíveis
+                        </span>
+                    </div>
+                </div>
 
-    <!-- Escolha do Tipo de Sessão -->
-    <div class="tipo-sessao-container">
-        <h3>Tipo de Sessão</h3>
-        <div class="tipo-sessao-opcoes">
-            <div class="tipo-box">
-                <input type="radio" id="tipoAvulsa" name="tipoSessao" value="avulsa" checked>
-                <label for="tipoAvulsa" class="tipo-label">
-                    <strong>Sessão Avulsa</strong>
-                    <span class="preco">R$ 150,00</span>
-                    <span class="descricao">Pagamento único por sessão</span>
-                </label>
+                <!-- Escolha do Tipo de Sessão -->
+                <div class="tipo-sessao-container">
+                    <h3>Tipo de Sessão</h3>
+                    <div class="tipo-sessao-opcoes">
+                        <div class="tipo-box">
+                            <input type="radio" id="tipoAvulsa" name="tipoSessao" value="avulsa" checked>
+                            <label for="tipoAvulsa" class="tipo-label">
+                                <strong>Sessão Avulsa</strong>
+                                <span class="preco">R$ 150,00</span>
+                                <span class="descricao">Pagamento único por sessão</span>
+                            </label>
+                        </div>
+
+                        <div class="tipo-box">
+                            <input type="radio" id="tipoPacoteMensal" name="tipoSessao" value="pacote_mensal">
+                            <label for="tipoPacoteMensal" class="tipo-label">
+                                <strong>Pacote Mensal</strong>
+                                <span class="preco">R$ 480,00</span>
+                                <span class="descricao">4 sessões mensais (R$ 120/sessão)</span>
+                            </label>
+                        </div>
+
+                        <div class="tipo-box">
+                            <input type="radio" id="tipoPacoteAnual" name="tipoSessao" value="pacote_anual">
+                            <label for="tipoPacoteAnual" class="tipo-label">
+                                <strong>Pacote Anual</strong>
+                                <span class="preco">R$ 5.760,00</span>
+                                <span class="descricao">48 sessões anuais (R$ 120/sessão) - Economia de R$ 1.440!</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alerta de Horário Fixo -->
+                <div class="alerta-horario-fixo" id="alertaHorarioFixo" style="display: none;">
+                    <div class="alerta-icon">⚠️</div>
+                    <div class="alerta-content">
+                        <strong>Atenção: Horário Fixo</strong>
+                        <p>Ao escolher um <strong>pacote</strong>, todas as suas sessões serão agendadas no <strong>mesmo dia da semana</strong> e no <strong>mesmo horário</strong> que você selecionar na primeira sessão.</p>
+                        <p><strong>Exemplo:</strong> Se você escolher <em>quarta-feira às 19:00</em>, todas as suas sessões do pacote serão nas quartas-feiras às 19:00.</p>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h3>📋 Informações Importantes:</h3>
+                    <ul>
+                        <li>Sessões de <strong>1 hora (60 minutos)</strong></li>
+                        <li>Atendimento de <strong>Segunda a Sexta</strong></li>
+                        <li>Horários disponíveis: <strong>18h, 19h e 20:30h</strong></li>
+                    </ul>
+                </div>
+
+                <button class="btn btn-primary" id="btnNextStep1" disabled>
+                    Próximo: Escolher Horário →
+                </button>
             </div>
 
-            <div class="tipo-box">
-                <input type="radio" id="tipoPacoteMensal" name="tipoSessao" value="pacote_mensal">
-                <label for="tipoPacoteMensal" class="tipo-label">
-                    <strong>Pacote Mensal</strong>
-                    <span class="preco">R$ 480,00</span>
-                    <span class="descricao">4 sessões mensais (R$ 120/sessão)</span>
-                </label>
-            </div>
-
-            <div class="tipo-box">
-                <input type="radio" id="tipoPacoteAnual" name="tipoSessao" value="pacote_anual">
-                <label for="tipoPacoteAnual" class="tipo-label">
-                    <strong>Pacote Anual</strong>
-                    <span class="preco">R$ 5.760,00</span>
-                    <span class="descricao">48 sessões anuais (R$ 120/sessão) - Economia de R$ 1.440!</span>
-                </label>
-            </div>
-        </div>
-    </div>
-
-    <!-- Alerta de Horário Fixo -->
-    <div class="alerta-horario-fixo" id="alertaHorarioFixo" style="display: none;">
-        <div class="alerta-icon">⚠️</div>
-        <div class="alerta-content">
-            <strong>Atenção: Horário Fixo</strong>
-            <p>Ao escolher um <strong>pacote</strong>, todas as suas sessões serão agendadas no <strong>mesmo dia da semana</strong> e no <strong>mesmo horário</strong> que você selecionar na primeira sessão.</p>
-            <p><strong>Exemplo:</strong> Se você escolher <em>quarta-feira às 19:00</em>, todas as suas sessões do pacote serão nas quartas-feiras às 19:00.</p>
-        </div>
-    </div>
-
-    <div class="info-box">
-        <h3>📋 Informações Importantes:</h3>
-        <ul>
-            <li>Sessões de <strong>1 hora (60 minutos)</strong></li>
-            <li>Atendimento de <strong>Segunda a Sexta</strong></li>
-            <li>Horários disponíveis: <strong>18h, 19h e 20:30h</strong></li>
-        </ul>
-    </div>
-
-    <button class="btn btn-primary" id="btnNextStep1" disabled>
-        Próximo: Escolher Horário →
-    </button>
-</div>
             <!-- PASSO 2: Escolher Horário -->
             <div class="step-content" id="step2">
                 <h2>Escolha o Horário</h2>
@@ -334,7 +335,7 @@
 
         <!-- Footer -->
         <footer class="footer">
-        <p class="subtitle">Psicóloga Clínica - CRP 14/09165-4</p>
+            <p class="subtitle">Psicóloga Clínica - CRP 14/09165-4</p>
             <p>Todos os direitos reservados</p>
         </footer>
     </div>
