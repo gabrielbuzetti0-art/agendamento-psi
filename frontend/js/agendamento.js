@@ -1,4 +1,6 @@
-// Estado da aplicação
+// =========================
+// ESTADO GLOBAL DA APLICAÇÃO
+// =========================
 let state = {
     currentStep: 1,
     selectedDate: null,
@@ -9,7 +11,13 @@ let state = {
     parcelas: 1
 };
 
-// Inicialização
+// Disponibilidade por dia para o calendário
+// formato esperado: { 'YYYY-MM-DD': { status: 'full'|'partial'|'none', ... } }
+let calendarAvailability = {};
+
+// =========================
+// INICIALIZAÇÃO
+// =========================
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Sistema iniciado');
     initCalendar();
@@ -18,17 +26,87 @@ document.addEventListener('DOMContentLoaded', () => {
     initCEPSearch();
 });
 
+// =========================
+// CALENDÁRIO + DISPONIBILIDADE
+// =========================
+
+// Carregar disponibilidade do mês para o calendário
+async function carregarDisponibilidadeMes(instance, ano, mes) {
+    try {
+        console.log('📅 Carregando disponibilidade do mês:', ano, mes);
+        const response = await agendamentoAPI.disponibilidadeCalendario(ano, mes);
+
+        if (!response || !response.data) {
+            console.error('❌ Resposta inválida em disponibilidadeCalendario:', response);
+            calendarAvailability = {};
+            instance.redraw();
+            return;
+        }
+
+        // Ex.: response.data = { '2025-11-14': { status: 'full' }, ... }
+        calendarAvailability = response.data;
+        console.log('✅ Disponibilidade do calendário carregada:', calendarAvailability);
+
+        // Redesenha os dias (chama onDayCreate de novo)
+        instance.redraw();
+    } catch (error) {
+        console.error('❌ Erro ao carregar disponibilidade do mês:', error);
+        calendarAvailability = {};
+        instance.redraw();
+    }
+}
+
+// Inicializar calendário (com cores e bloqueio de dias sem horário)
 function initCalendar() {
-    const datepicker = flatpickr("#datepicker", {
+    flatpickr("#datepicker", {
         locale: "pt",
         minDate: "today",
         dateFormat: "d/m/Y",
         disable: [
             function(date) {
-                // Ainda bloqueia sábado (6) e domingo (0)
+                // Bloqueia sábado (6) e domingo (0)
                 return (date.getDay() === 0 || date.getDay() === 6);
             }
         ],
+        onReady: function(selectedDates, dateStr, instance) {
+            console.log('📅 Flatpickr pronto');
+            const anoAtual = instance.currentYear;
+            const mesAtual = instance.currentMonth + 1; // 0-based → 1-12
+            carregarDisponibilidadeMes(instance, anoAtual, mesAtual);
+        },
+        onMonthChange: function(selectedDates, dateStr, instance) {
+            const ano = instance.currentYear;
+            const mes = instance.currentMonth + 1;
+            console.log('📅 Mês alterado:', ano, mes);
+            carregarDisponibilidadeMes(instance, ano, mes);
+        },
+        onYearChange: function(selectedDates, dateStr, instance) {
+            const ano = instance.currentYear;
+            const mes = instance.currentMonth + 1;
+            console.log('📅 Ano alterado:', ano, mes);
+            carregarDisponibilidadeMes(instance, ano, mes);
+        },
+        onDayCreate: function(dObj, dStr, instance, dayElem) {
+            const d = dayElem.dateObj;
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const key = `${year}-${month}-${day}`;
+
+            if (!calendarAvailability || !calendarAvailability[key]) return;
+
+            // Remove classes antigas
+            dayElem.classList.remove('dia-full', 'dia-partial', 'dia-none');
+
+            const status = calendarAvailability[key].status;
+            if (status === 'full') {
+                dayElem.classList.add('dia-full');      // verde
+            } else if (status === 'partial') {
+                dayElem.classList.add('dia-partial');   // amarelo
+            } else if (status === 'none') {
+                dayElem.classList.add('dia-none');      // vermelho
+            }
+        },
         onChange: function(selectedDates, dateStr, instance) {
             const btnNext = document.getElementById('btnNextStep1');
 
@@ -39,14 +117,15 @@ function initCalendar() {
             }
 
             const selected = selectedDates[0];
-
             const year = selected.getFullYear();
             const month = String(selected.getMonth() + 1).padStart(2, '0');
             const day = String(selected.getDate()).padStart(2, '0');
             const key = `${year}-${month}-${day}`;
 
+            const info = calendarAvailability[key];
+
             // Se for dia vermelho (none), não deixa avançar
-            if (calendarAvailability[key] && calendarAvailability[key].status === 'none') {
+            if (info && info.status === 'none') {
                 alert('Não há horários disponíveis nesta data. Por favor, escolha outro dia.');
                 instance.clear();
                 state.selectedDate = null;
@@ -56,46 +135,14 @@ function initCalendar() {
 
             state.selectedDate = selected;
             btnNext.disabled = false;
-            console.log('✅ Data selecionada:', state.selectedDate);
-        },
-        onDayCreate: function(dObj, dStr, fp, dayElem) {
-            const d = dayElem.dateObj;
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            const key = `${year}-${month}-${day}`;
-
-            if (!calendarAvailability || !calendarAvailability[key]) {
-                return;
-            }
-
-            // Remove classes antigas
-            dayElem.classList.remove('dia-full', 'dia-partial', 'dia-none');
-
-            const status = calendarAvailability[key].status;
-            if (status === 'full') {
-                dayElem.classList.add('dia-full');
-            } else if (status === 'partial') {
-                dayElem.classList.add('dia-partial');
-            } else if (status === 'none') {
-                dayElem.classList.add('dia-none');
-            }
-        },
-        onMonthChange: function(selectedDates, dateStr, instance) {
-            const currentYear = instance.currentYear;
-            const currentMonth = instance.currentMonth + 1; // 0-based -> 1-12
-            carregarDisponibilidadeMes(instance, currentYear, currentMonth);
-        },
-        onReady: function(selectedDates, dateStr, instance) {
-            const currentYear = instance.currentYear;
-            const currentMonth = instance.currentMonth + 1;
-            carregarDisponibilidadeMes(instance, currentYear, currentMonth);
+            console.log('✅ Data selecionada:', state.selectedDate, 'info:', info);
         }
     });
 }
 
-
-// Inicializar event listeners
+// =========================
+// EVENT LISTENERS GERAIS
+// =========================
 function initEventListeners() {
     document.getElementById('btnNextStep1').addEventListener('click', () => {
         console.log('▶️ Passo 1 → 2');
@@ -122,6 +169,12 @@ function initEventListeners() {
             } else {
                 alertaHorarioFixo.style.display = 'none';
             }
+
+            // Se já estiver no passo de horários, recarrega com a nova regra
+            if (state.currentStep === 2 && state.selectedDate) {
+                console.log('🔄 Recarregando horários com novo tipo de sessão...');
+                loadHorarios();
+            }
         });
     });
 
@@ -134,7 +187,9 @@ function initEventListeners() {
     }
 }
 
-// Inicializar máscaras
+// =========================
+// MÁSCARAS E CEP
+// =========================
 function initMasks() {
     const telefoneInput = document.getElementById('telefone');
     const cpfInput = document.getElementById('cpf');
@@ -153,7 +208,6 @@ function initMasks() {
     });
 }
 
-// Inicializar busca de CEP
 function initCEPSearch() {
     const cepInput = document.getElementById('cep');
     
@@ -175,7 +229,9 @@ function initCEPSearch() {
     });
 }
 
-// Navegar para um passo específico
+// =========================
+// NAVEGAÇÃO ENTRE PASSOS
+// =========================
 function goToStep(stepNumber) {
     console.log('===================================');
     console.log('📍 NAVEGANDO PARA PASSO:', stepNumber);
@@ -212,7 +268,9 @@ function goToStep(stepNumber) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// Carregar horários disponíveis
+// =========================
+// CARREGAR HORÁRIOS
+// =========================
 async function loadHorarios() {
     console.log('🔍 ========== LOAD HORÁRIOS INICIADO ==========');
     console.log('Data no state:', state.selectedDate);
@@ -236,19 +294,15 @@ async function loadHorarios() {
 
     try {
         const dataISO = utils.formatarDataISO(state.selectedDate);
-        console.log('📤 Fazendo requisição para:', dataISO);
+        console.log('📤 Fazendo requisição para:', dataISO, 'tipo:', state.tipoSessao);
         
-        const response = await agendamentoAPI.buscarHorariosDisponiveis(dataISO);
+        // IMPORTANTE: envia também o tipo de sessão
+        const response = await agendamentoAPI.buscarHorariosDisponiveis(dataISO, state.tipoSessao);
         
         console.log('📥 Resposta recebida:', response);
 
         loadingHorarios.style.display = 'none';
 
-       console.log('📥 Resposta recebida:', response);
-
-        loadingHorarios.style.display = 'none';
-
-        // VERIFICAÇÃO CRÍTICA
         if (!response || !response.data || !response.data.horariosDisponiveis) {
             console.error('❌ Resposta inválida:', response);
             horariosGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #dc3545;">Erro: Resposta inválida da API.</p>';
@@ -258,7 +312,6 @@ async function loadHorarios() {
         const horariosDisponiveis = response.data.horariosDisponiveis;
         
         console.log('✅ Horários disponíveis recebidos:', horariosDisponiveis);
-        console.log('✅ Tipo:', typeof horariosDisponiveis);
         console.log('✅ É array?', Array.isArray(horariosDisponiveis));
         console.log('✅ Length:', horariosDisponiveis.length);
 
@@ -267,11 +320,8 @@ async function loadHorarios() {
             return;
         }
 
-        // LIMPAR O GRID ANTES DE ADICIONAR
         horariosGrid.innerHTML = '';
         
-        console.log('🔨 Criando elementos de horário...');
-
         horariosDisponiveis.forEach((horario, index) => {
             console.log(`  Criando horário ${index + 1}:`, horario);
             
@@ -292,7 +342,6 @@ async function loadHorarios() {
             });
 
             horariosGrid.appendChild(horarioElement);
-            console.log('  ✓ Horário adicionado ao DOM');
         });
         
         console.log('✅ Total de horários renderizados:', horariosGrid.children.length);
@@ -307,7 +356,9 @@ async function loadHorarios() {
     console.log('🔍 ========== LOAD HORÁRIOS FINALIZADO ==========');
 }
 
-// Validar e processar passo 3
+// =========================
+// PASSO 3 - DADOS DO PACIENTE
+// =========================
 function handleStep3() {
     const form = document.getElementById('formDadosPaciente');
     
@@ -347,7 +398,9 @@ function handleStep3() {
     goToStep(4);
 }
 
-// Configurar opções de parcelamento
+// =========================
+// PARCELAMENTO (PASSO 4)
+// =========================
 function configurarParcelamento() {
     console.log('⚙️ Configurando parcelamento para tipo:', state.tipoSessao);
     
@@ -357,7 +410,6 @@ function configurarParcelamento() {
     
     if (tipoSessao === 'pacote_mensal' || tipoSessao === 'pacote_anual') {
         parcelamentoContainer.style.display = 'block';
-        
         selectParcelas.innerHTML = '';
         
         if (tipoSessao === 'pacote_mensal') {
@@ -390,7 +442,6 @@ function configurarParcelamento() {
     }
 }
 
-// Atualizar detalhes do parcelamento
 function atualizarDetalheParcelas() {
     const tipoSessao = state.tipoSessao;
     const parcelas = state.parcelas;
@@ -425,24 +476,25 @@ function atualizarDetalheParcelas() {
             • Economia de R$ ${economia.toFixed(2)}!<br>
             • Parcelamento: ${parcelas}x de R$ ${valorParcela}
         `;
+    } else {
+        detalheElement.innerHTML = '';
     }
 }
 
-// Obter dia da semana por extenso
 function obterDiaSemana(data) {
     if (!data) return 'dia da semana';
-    
     const dias = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
     return dias[data.getDay()];
 }
 
-// Mostrar resumo do agendamento
+// =========================
+// RESUMO E FINALIZAÇÃO
+// =========================
 function mostrarResumo() {
     console.log('📋 ========== MOSTRANDO RESUMO ==========');
     console.log('Estado completo:', JSON.parse(JSON.stringify(state)));
     
     const tipoSessao = state.tipoSessao;
-    
     let valorSessao, tipoTexto;
     
     if (tipoSessao === 'pacote_mensal') {
@@ -457,8 +509,6 @@ function mostrarResumo() {
     }
 
     const dataFormatada = state.selectedDate ? utils.formatarData(state.selectedDate) : 'Data não selecionada';
-    
-    console.log('Resumo gerado:', { dataFormatada, horario: state.selectedTime, tipo: tipoTexto, valor: valorSessao });
     
     document.getElementById('resumoData').textContent = dataFormatada;
     document.getElementById('resumoHorario').textContent = state.selectedTime || 'Horário não selecionado';
@@ -497,40 +547,31 @@ async function finalizarAgendamento() {
         } catch (errorBusca) {
             console.log('📝 Paciente não encontrado, criando novo...');
             
-            // Criar novo paciente
-            try {
-                const novoPaciente = await pacienteAPI.criar({
-                    nome: state.pacienteData.nome,
-                    email: state.pacienteData.email,
-                    telefone: state.pacienteData.telefone,
-                    cpf: state.pacienteData.cpf.replace(/\D/g, ''),
-                    dataNascimento: state.pacienteData.dataNascimento,
-                    endereco: {
-                        rua: state.pacienteData.rua || '',
-                        numero: state.pacienteData.numero || '',
-                        bairro: state.pacienteData.bairro || '',
-                        cidade: state.pacienteData.cidade || '',
-                        estado: state.pacienteData.estado || '',
-                        cep: state.pacienteData.cep?.replace(/\D/g, '') || ''
-                    },
-                    primeiraConsulta: state.pacienteData.primeiraConsulta || false,
-                    observacoes: state.pacienteData.observacoes || ''
-                });
-                
-                pacienteId = novoPaciente.data._id;
-                console.log('✅ Novo paciente criado:', pacienteId);
-            } catch (errorCriar) {
-                console.error('❌ Erro ao criar paciente:', errorCriar);
-                throw new Error('Falha ao cadastrar paciente: ' + errorCriar.message);
-            }
+            const novoPaciente = await pacienteAPI.criar({
+                nome: state.pacienteData.nome,
+                email: state.pacienteData.email,
+                telefone: state.pacienteData.telefone,
+                cpf: state.pacienteData.cpf.replace(/\D/g, ''),
+                dataNascimento: state.pacienteData.dataNascimento,
+                endereco: {
+                    rua: state.pacienteData.rua || '',
+                    numero: state.pacienteData.numero || '',
+                    bairro: state.pacienteData.bairro || '',
+                    cidade: state.pacienteData.cidade || '',
+                    estado: state.pacienteData.estado || '',
+                    cep: state.pacienteData.cep?.replace(/\D/g, '') || ''
+                },
+                primeiraConsulta: state.pacienteData.primeiraConsulta || false,
+                observacoes: state.pacienteData.observacoes || ''
+            });
+            
+            pacienteId = novoPaciente.data._id;
+            console.log('✅ Novo paciente criado:', pacienteId);
         }
 
-        // VERIFICAÇÃO CRÍTICA
         if (!pacienteId) {
             throw new Error('Erro: ID do paciente não foi obtido!');
         }
-
-        console.log('✅ pacienteId confirmado:', pacienteId);
 
         // 2. PREPARAR DATA E HORA
         const [hora, minuto] = state.selectedTime.split(':');
@@ -553,7 +594,6 @@ async function finalizarAgendamento() {
             observacoes: state.pacienteData.observacoes || ''
         };
 
-        // Adicionar parcelas apenas se for pacote
         if (state.tipoSessao === 'pacote_mensal' || state.tipoSessao === 'pacote_anual') {
             dadosAgendamento.parcelas = state.parcelas;
         }
