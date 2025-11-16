@@ -567,15 +567,14 @@ exports.buscarHorariosDisponiveis = async (req, res) => {
     }
 
     return res.status(200).json({
-      success: true,
-      data: {
-        data,
-        tipo: tipoSessao,
-        horariosDisponiveis,
-        totalSessoes,
-        conflitosPorHorario
-      }
-    });
+  success: true,
+  data: {
+    horariosDisponiveis,  // ← AGORA FRONTEND CONSEGUE PEGAR!
+    tipo: tipoSessao,
+    totalSessoes,
+    conflitosPorHorario
+  }
+});
   } catch (error) {
     console.error('❌ Erro ao buscar horários disponíveis:', error);
     res.status(500).json({
