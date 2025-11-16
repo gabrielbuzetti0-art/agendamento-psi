@@ -4,14 +4,14 @@ const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
   port: process.env.EMAIL_PORT,
-  secure: false, // true para 465, false para outras portas
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   }
 });
 
-// Verificar conexão (opcional - para debug)
+// Verificar conexão
 transporter.verify(function (error, success) {
   if (error) {
     console.log('❌ Erro na configuração do email:', error);
@@ -41,20 +41,33 @@ exports.enviarEmailConfirmacao = async (agendamento) => {
     const paciente = agendamento.paciente;
     const dataHoraFormatada = formatarDataHora(agendamento.dataHora);
 
+    // Determinar tipo de sessão
+    let tipoTexto = 'Sessão Avulsa';
+    if (agendamento.tipo === 'pacote_mensal') {
+      tipoTexto = 'Pacote Mensal (4 sessões)';
+    } else if (agendamento.tipo === 'pacote_anual') {
+      tipoTexto = 'Pacote Anual (48 sessões)';
+    }
+
+    // Status do pagamento
+    const statusPagamento = agendamento.statusPagamento === 'pago' ? 'Pago' : 'Aguardando Pagamento';
+
     const mailOptions = {
       from: `"${process.env.PSICOLOGA_NOME}" <${process.env.EMAIL_USER}>`,
       to: paciente.email,
-      cc: process.env.PSICOLOGA_EMAIL, // Cópia para a psicóloga
-      subject: 'Confirmação de Agendamento - Psicoterapia',
+      cc: process.env.PSICOLOGA_EMAIL,
+      subject: '✅ Agendamento Confirmado - Caroline Marques Brito',
       html: `
         <!DOCTYPE html>
         <html>
         <head>
           <style>
             body {
-              font-family: Arial, sans-serif;
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
               line-height: 1.6;
               color: #333;
+              margin: 0;
+              padding: 0;
             }
             .container {
               max-width: 600px;
@@ -63,85 +76,135 @@ exports.enviarEmailConfirmacao = async (agendamento) => {
               background-color: #f9f9f9;
             }
             .header {
-              background-color: #4a90e2;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
               color: white;
-              padding: 20px;
+              padding: 30px;
               text-align: center;
-              border-radius: 5px 5px 0 0;
+              border-radius: 10px 10px 0 0;
+            }
+            .header h1 {
+              margin: 0;
+              font-size: 24px;
             }
             .content {
               background-color: white;
               padding: 30px;
-              border-radius: 0 0 5px 5px;
+              border-radius: 0 0 10px 10px;
             }
             .info-box {
-              background-color: #f0f7ff;
-              border-left: 4px solid #4a90e2;
-              padding: 15px;
+              background-color: #f0f8ff;
+              border-left: 4px solid #667eea;
+              padding: 20px;
               margin: 20px 0;
+              border-radius: 5px;
             }
             .info-box h3 {
               margin-top: 0;
-              color: #4a90e2;
+              color: #667eea;
+            }
+            .info-box ul {
+              list-style: none;
+              padding: 0;
+              margin: 0;
+            }
+            .info-box ul li {
+              padding: 8px 0;
+              border-bottom: 1px solid #e0e0e0;
+            }
+            .info-box ul li:last-child {
+              border-bottom: none;
+            }
+            .alert {
+              background-color: #fff3cd;
+              border-left: 4px solid #ffc107;
+              padding: 15px;
+              margin: 20px 0;
+              border-radius: 5px;
+            }
+            .alert strong {
+              color: #856404;
+            }
+            .orientacoes {
+              background-color: #f0f8ff;
+              padding: 20px;
+              margin: 20px 0;
+              border-radius: 5px;
+              border-left: 4px solid #667eea;
+            }
+            .orientacoes h3 {
+              color: #667eea;
+              margin-top: 0;
+            }
+            .orientacoes ul {
+              padding-left: 20px;
+            }
+            .orientacoes ul li {
+              margin: 10px 0;
             }
             .footer {
               text-align: center;
-              margin-top: 20px;
-              font-size: 12px;
+              margin-top: 30px;
+              padding-top: 20px;
+              border-top: 1px solid #e0e0e0;
+              font-size: 14px;
               color: #666;
             }
-            .button {
-              display: inline-block;
-              padding: 12px 30px;
-              background-color: #4a90e2;
-              color: white;
-              text-decoration: none;
-              border-radius: 5px;
-              margin: 20px 0;
+            .footer p {
+              margin: 5px 0;
             }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="header">
-              <h1>Agendamento Confirmado! ✅</h1>
+              <h1>✅ Agendamento Confirmado!</h1>
             </div>
+            
             <div class="content">
-              <p>Olá, <strong>${paciente.nome}</strong>!</p>
-              
-              <p>Seu agendamento foi realizado com sucesso!</p>
+              <p><strong>Olá, ${paciente.nome}!</strong></p>
+              <p>Seu agendamento foi realizado com sucesso.</p>
               
               <div class="info-box">
-                <h3>Detalhes do Agendamento:</h3>
-                <p><strong>Data e Hora:</strong> ${dataHoraFormatada}</p>
-                <p><strong>Tipo:</strong> ${agendamento.tipo === 'individual' ? 'Sessão Individual' : agendamento.tipo === 'casal' ? 'Terapia de Casal' : 'Avaliação'}</p>
-                <p><strong>Valor:</strong> R$ ${agendamento.valor.toFixed(2)}</p>
-                <p><strong>Status do Pagamento:</strong> ${agendamento.pagamento.status === 'pendente' ? 'Aguardando Pagamento' : 'Pago'}</p>
+                <h3>📅 Detalhes da Sessão:</h3>
+                <ul>
+                  <li><strong>📆 Data e horário:</strong> ${dataHoraFormatada}</li>
+                  <li><strong>⏱️ Duração:</strong> 50 minutos</li>
+                  <li><strong>📋 Tipo:</strong> ${tipoTexto}</li>
+                  <li><strong>💰 Valor:</strong> R$ ${agendamento.valor.toFixed(2)}</li>
+                  <li><strong>💳 Status do pagamento:</strong> ${statusPagamento}</li>
+                </ul>
               </div>
               
-              <p><strong>Profissional:</strong> ${process.env.PSICOLOGA_NOME}<br>
-              CRP: XXXXX/XX</p>
-              
-              ${agendamento.pagamento.status === 'pendente' ? `
-                <p style="color: #e74c3c;">⚠️ <strong>Atenção:</strong> Seu agendamento será confirmado após o pagamento.</p>
+              ${agendamento.statusPagamento !== 'pago' ? `
+              <div class="alert">
+                <strong>⚠️ Importante:</strong> Seu horário será efetivamente garantido após a confirmação do pagamento.
+              </div>
               ` : ''}
               
-              <h3>Informações Importantes:</h3>
-              <ul>
-                <li>Chegue com 5 minutos de antecedência</li>
-                <li>Em caso de impossibilidade de comparecer, avise com pelo menos 24h de antecedência</li>
-                <li>Traga documento de identificação</li>
-              </ul>
+              <div class="orientacoes">
+                <h3>📝 Orientações para a Sessão:</h3>
+                <ul>
+                  <li>Escolha um <strong>ambiente tranquilo, seguro e silencioso</strong> para a realização da consulta.</li>
+                  <li>Se necessário, utilize <strong>fones de ouvido</strong> para garantir sua privacidade.</li>
+                  <li>Certifique-se de que possui <strong>boa conexão com a internet</strong> e acesso aos equipamentos necessários.</li>
+                  <li>Mantenha <strong>câmera e microfone ligados</strong> para que a sessão ocorra de forma adequada.</li>
+                  <li>Chegue com <strong>5 minutos de antecedência</strong>.</li>
+                  <li>Caso precise desmarcar, avise com pelo menos <strong>24h de antecedência</strong>.</li>
+                </ul>
+              </div>
               
-              <p>Em caso de dúvidas, entre em contato através do email: ${process.env.PSICOLOGA_EMAIL}</p>
+              <p><strong>Para dúvidas ou suporte, entre em contato:</strong></p>
+              <p>
+                📧 <strong>Email:</strong> ${process.env.PSICOLOGA_EMAIL}<br>
+                📱 <strong>WhatsApp:</strong> (17) 99625-8369
+              </p>
               
-              <p>Atenciosamente,<br>
-              <strong>${process.env.PSICOLOGA_NOME}</strong><br>
-              Psicóloga Clínica</p>
-            </div>
-            <div class="footer">
-              <p>Este é um email automático, por favor não responda.</p>
-              <p>&copy; 2025 ${process.env.PSICOLOGA_NOME} - Todos os direitos reservados</p>
+              <div class="footer">
+                <p><strong>Atenciosamente,</strong></p>
+                <p><strong>${process.env.PSICOLOGA_NOME}</strong><br>
+                Psicóloga Clínica - CRP 14/09165-4</p>
+                <p><a href="https://psicarolmarques.com.br" style="color: #667eea; text-decoration: none;">psicarolmarques.com.br</a></p>
+              </div>
             </div>
           </div>
         </body>
@@ -302,7 +365,7 @@ exports.enviarEmailCancelamento = async (agendamento) => {
               <div class="info-box">
                 <h3>Detalhes do Agendamento Cancelado:</h3>
                 <p><strong>Data e Hora:</strong> ${dataHoraFormatada}</p>
-                ${agendamento.cancelamento.motivo ? `<p><strong>Motivo:</strong> ${agendamento.cancelamento.motivo}</p>` : ''}
+                ${agendamento.cancelamento?.motivo ? `<p><strong>Motivo:</strong> ${agendamento.cancelamento.motivo}</p>` : ''}
               </div>
               
               <p>Para reagendar, entre em contato através do email: ${process.env.PSICOLOGA_EMAIL}</p>
@@ -331,6 +394,14 @@ exports.notificarPsicologaNovoAgendamento = async (agendamento) => {
   try {
     const paciente = agendamento.paciente;
     const dataHoraFormatada = formatarDataHora(agendamento.dataHora);
+
+    // Determinar tipo
+    let tipoTexto = 'Sessão Avulsa';
+    if (agendamento.tipo === 'pacote_mensal') {
+      tipoTexto = 'Pacote Mensal (4 sessões)';
+    } else if (agendamento.tipo === 'pacote_anual') {
+      tipoTexto = 'Pacote Anual (48 sessões)';
+    }
 
     const mailOptions = {
       from: `"Sistema de Agendamento" <${process.env.EMAIL_USER}>`,
@@ -394,9 +465,9 @@ exports.notificarPsicologaNovoAgendamento = async (agendamento) => {
               <div class="info-box">
                 <h3>Detalhes do Agendamento:</h3>
                 <p><strong>Data e Hora:</strong> ${dataHoraFormatada}</p>
-                <p><strong>Tipo:</strong> ${agendamento.tipo === 'individual' ? 'Sessão Individual' : agendamento.tipo === 'casal' ? 'Terapia de Casal' : 'Avaliação'}</p>
+                <p><strong>Tipo:</strong> ${tipoTexto}</p>
                 <p><strong>Valor:</strong> R$ ${agendamento.valor.toFixed(2)}</p>
-                <p><strong>Status do Pagamento:</strong> ${agendamento.pagamento.status}</p>
+                <p><strong>Status do Pagamento:</strong> ${agendamento.statusPagamento}</p>
                 ${agendamento.observacoes ? `<p><strong>Observações:</strong> ${agendamento.observacoes}</p>` : ''}
               </div>
               
