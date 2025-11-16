@@ -124,13 +124,56 @@ async function webhookMercadoPago(req, res, next) {
     // Responder imediatamente
     res.status(200).json({ received: true });
 
-    // Aqui você pode processar o webhook depois (consultar pagamento, etc.)
+    // Processar apenas eventos de pagamento
     if (payload.type === 'payment' && payload.data?.id) {
-      console.log('💳 Pagamento recebido, ID:', payload.data.id);
+      console.log('💳 Processando pagamento, ID:', payload.data.id);
+
+      try {
+        // Buscar informações do pagamento no Mercado Pago
+        const mercadopago = require('mercadopago');
+        const { MercadoPagoConfig, Payment } = mercadopago;
+        
+        const client = new MercadoPagoConfig({
+          accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN,
+        });
+        const payment = new Payment(client);
+
+        const paymentInfo = await payment.get({ id: payload.data.id });
+        console.log('💰 Status do pagamento:', paymentInfo.status);
+
+        // Se pagamento aprovado
+        if (paymentInfo.status === 'approved') {
+          const agendamentoId = paymentInfo.external_reference;
+
+          if (agendamentoId) {
+            const agendamento = await Agendamento.findById(agendamentoId).populate('paciente');
+
+            if (agendamento) {
+              // Atualizar status do pagamento
+              agendamento.statusPagamento = 'pago';
+              agendamento.metodoPagamento = 'mercadopago';
+              agendamento.dataPagamento = new Date();
+              agendamento.status = 'confirmado';
+              await agendamento.save();
+
+              console.log('✅ Agendamento atualizado:', agendamentoId);
+
+              // ENVIAR EMAIL DE CONFIRMAÇÃO
+              try {
+                await enviarEmailConfirmacao(agendamento);
+                console.log('📧 Email de confirmação enviado!');
+              } catch (emailError) {
+                console.error('⚠️ Erro ao enviar email:', emailError.message);
+              }
+            }
+          }
+        }
+      } catch (processError) {
+        console.error('❌ Erro ao processar webhook:', processError.message);
+      }
     }
   } catch (err) {
     console.error('❌ Erro no webhook:', err);
-    next(err);
   }
 }
 
