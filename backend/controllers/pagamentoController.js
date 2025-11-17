@@ -1,179 +1,396 @@
 // controllers/pagamentoController.js
-const Agendamento = require('../models/Agendamento');
-const { enviarEmailConfirmacao } = require('../utils/emailService');
 const mercadopago = require('mercadopago');
+const Lead = require('../models/Lead');
+const Agendamento = require('../models/Agendamento');
+const Paciente = require('../models/Paciente');
+const { enviarEmailConfirmacao } = require('../utils/emailService');
 
-// ====== Config Mercado Pago (SDK v2) ======
+// ================================
+// Inicialização Mercado Pago (SDK v2)
+// ================================
+let mpClient = null;
 let mpPreference = null;
-(function initMP() {
+let mpPayment = null;
+
+(function initMercadoPago() {
   try {
-    const { MercadoPagoConfig, Preference } = mercadopago;
-    const client = new MercadoPagoConfig({
-      accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN,
+    const { MercadoPagoConfig, Preference, Payment } = mercadopago;
+
+    mpClient = new MercadoPagoConfig({
+      accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN
     });
-    mpPreference = new Preference(client);
+
+    mpPreference = new Preference(mpClient);
+    mpPayment = new Payment(mpClient);
+
     console.log('✅ Mercado Pago inicializado com sucesso!');
-  } catch (e) {
-    console.warn('⚠️ Mercado Pago SDK não inicializado. Verifique dependência/ENV.', e?.message);
+  } catch (error) {
+    console.error('❌ Erro ao inicializar Mercado Pago:', error);
   }
 })();
 
-// Helper seguro para pegar campos numéricos
-function toNumber(n, fallback = 0) {
-  const v = Number(n);
-  return Number.isFinite(v) ? v : fallback;
+// Helper pra número
+function toNumber(value, fallback = 0) {
+  if (typeof value === 'number') return value;
+  if (!value) return fallback;
+  const n = Number(String(value).replace(',', '.'));
+  return isNaN(n) ? fallback : n;
 }
 
 /**
  * POST /api/pagamentos/criar-preferencia
- * body: { agendamentoId }
+ *
+ * MODO LEGADO (compat):
+ *  body: { agendamentoId }
+ *
+ * MODO NOVO (recomendado):
+ *  body:
+ *  {
+ *    nome, email, telefone, cpf, dataNascimento, endereco,
+ *    tipoSessao,      // 'avulsa' | 'pacote_mensal' | 'pacote_anual'
+ *    dataHoraISO,     // "2025-11-20T19:00:00.000Z"
+ *    valor,
+ *    parcelas,
+ *    observacoes,
+ *    pacienteId       // opcional (se já existir)
+ *  }
  */
 async function criarPreferenciaPagamento(req, res, next) {
   try {
     if (!mpPreference) {
       return res.status(500).json({
         success: false,
-        message: 'Mercado Pago não configurado.',
+        message: 'Mercado Pago não configurado.'
       });
     }
 
     const { agendamentoId } = req.body || {};
-    if (!agendamentoId) {
-      return res.status(400).json({
-        success: false,
-        message: 'agendamentoId é obrigatório.',
+    let lead = null;
+
+    // ===================================
+    // 1) MODO LEGADO: veio só agendamentoId
+    // ===================================
+    if (agendamentoId) {
+      const ag = await Agendamento.findById(agendamentoId).populate('paciente');
+
+      if (!ag) {
+        return res.status(404).json({
+          success: false,
+          message: 'Agendamento não encontrado para criar preferência.'
+        });
+      }
+
+      const paciente = ag.paciente;
+      if (!paciente) {
+        return res.status(400).json({
+          success: false,
+          message: 'Agendamento não possui paciente vinculado.'
+        });
+      }
+
+      const valorNumber = toNumber(ag.valor, 0);
+      if (valorNumber <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Valor inválido no agendamento.'
+        });
+      }
+
+      // Lead a partir do Agendamento + Paciente
+      lead = await Lead.create({
+        paciente: paciente._id,
+        nome: paciente.nome,
+        email: paciente.email,
+        telefone: paciente.telefone,
+        cpf: paciente.cpf,
+        dataNascimento: paciente.dataNascimento,
+        endereco: paciente.endereco || {},
+        tipoSessao:
+          ag.tipo === 'pacote_mensal' || ag.tipo === 'pacote_anual'
+            ? ag.tipo
+            : 'avulsa',
+        dataHora: ag.dataHora,
+        observacoes: ag.observacoes,
+        statusLead: 'aguardando_pagamento',
+        valor: valorNumber,
+        parcelamento: {
+          parcelas: ag.parcelamento?.parcelas || 1,
+          valorParcela: ag.parcelamento?.valorParcela || valorNumber
+        },
+        origem: 'site'
+      });
+    } else {
+      // ===================================
+      // 2) MODO NOVO: dados do formulário
+      // ===================================
+      const {
+        nome,
+        email,
+        telefone,
+        cpf,
+        dataNascimento,
+        endereco = {},
+        tipoSessao,
+        dataHoraISO,
+        valor,
+        parcelas = 1,
+        observacoes,
+        pacienteId
+      } = req.body || {};
+
+      if (!nome || !email || !telefone || !tipoSessao || !dataHoraISO || !valor) {
+        return res.status(400).json({
+          success: false,
+          message: 'Dados obrigatórios ausentes para criar o pré-agendamento.'
+        });
+      }
+
+      const dataHora = new Date(dataHoraISO);
+      if (isNaN(dataHora.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Data/hora inválida.'
+        });
+      }
+
+      const valorNumber = toNumber(valor, 0);
+      if (valorNumber <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Valor inválido para o agendamento.'
+        });
+      }
+
+      lead = await Lead.create({
+        paciente: pacienteId || null,
+        nome,
+        email,
+        telefone,
+        cpf,
+        dataNascimento: dataNascimento || null,
+        endereco,
+        tipoSessao,
+        dataHora,
+        observacoes,
+        statusLead: 'aguardando_pagamento',
+        valor: valorNumber,
+        parcelamento: {
+          parcelas,
+          valorParcela: valorNumber / parcelas
+        },
+        origem: 'site'
       });
     }
 
-    // Buscar o agendamento
-    const ag = await Agendamento.findById(agendamentoId).populate('paciente');
-    if (!ag) {
-      return res.status(404).json({
-        success: false,
-        message: 'Agendamento não encontrado.',
-      });
-    }
-
-    // Montar descrição e valor
+    // ===================================
+    // 3) Criar preference no Mercado Pago
+    // ===================================
     let descricao = 'Sessão de Psicologia';
-    let valor = ag.valor;
-
-    if (ag.tipo === 'pacote_mensal') {
+    if (lead.tipoSessao === 'pacote_mensal') {
       descricao = 'Pacote Mensal - 4 sessões de Psicologia';
-    } else if (ag.tipo === 'pacote_anual') {
+    } else if (lead.tipoSessao === 'pacote_anual') {
       descricao = 'Pacote Anual - 48 sessões de Psicologia';
     }
 
-    const baseUrl = 'https://psicarolmarques.com.br/agendamento';
+    const baseUrl =
+      process.env.FRONTEND_AGENDAMENTO_URL ||
+      'https://psicarolmarques.com.br/agendamento';
 
     const body = {
       items: [
         {
           title: descricao,
           quantity: 1,
-          unit_price: toNumber(valor, 0),
-          currency_id: 'BRL',
-        },
+          unit_price: lead.valor,
+          currency_id: 'BRL'
+        }
       ],
-      external_reference: String(agendamentoId),
+      external_reference: String(lead._id),
       payer: {
-        name: ag.paciente?.nome || 'Paciente',
-        email: ag.paciente?.email || 'email@exemplo.com',
+        name: lead.nome,
+        email: lead.email
       },
       back_urls: {
-        // Todas voltam pra mesma página, mudando só os parâmetros
-        success: `${baseUrl}/?status=approved&agendamentoId=${agendamentoId}`,
-        pending: `${baseUrl}/?status=pending&agendamentoId=${agendamentoId}`,
-        failure: `${baseUrl}/?status=failure&agendamentoId=${agendamentoId}`,
+        success: `${baseUrl}/?status=approved&leadId=${lead._id}`,
+        pending: `${baseUrl}/?status=pending&leadId=${lead._id}`,
+        failure: `${baseUrl}/?status=failure&leadId=${lead._id}`
       },
       auto_return: 'approved',
       notification_url: process.env.MP_WEBHOOK_URL || undefined,
+      metadata: {
+        leadId: String(lead._id)
+      }
     };
 
     const pref = await mpPreference.create({ body });
+    const prefData = pref && pref.body ? pref.body : pref;
 
-    // Salva referência no agendamento
-    ag.statusPagamento = 'pendente';
-    ag.metodoPagamento = 'mercadopago';
-    ag.preferenciaId = pref?.id || null;
-    await ag.save();
-
-    console.log('✅ Preferência criada:', pref?.id);
+    lead.mpPreferenceId = prefData.id;
+    lead.mpInitPoint = prefData.init_point;
+    lead.mpSandboxInitPoint = prefData.sandbox_init_point;
+    await lead.save();
 
     return res.status(201).json({
       success: true,
-      preferenceId: pref?.id,
-      init_point: pref?.init_point,           // link produção
-      sandbox_init_point: pref?.sandbox_init_point, // link sandbox (se usar)
+      message: 'Preferência de pagamento criada com sucesso.',
+      data: {
+        leadId: lead._id,
+        preferenceId: prefData.id,
+        init_point: prefData.init_point,
+        sandbox_init_point: prefData.sandbox_init_point
+      }
     });
-  } catch (err) {
-    console.error('❌ Erro ao criar preferência:', err);
-    next(err);
+  } catch (error) {
+    console.error('Erro ao criar preferência de pagamento:', error);
+    next(error);
   }
 }
 
 /**
  * POST /api/pagamentos/webhook
- * Mercado Pago envia eventos aqui
+ * Endpoint chamado pelo Mercado Pago
  */
 async function webhookMercadoPago(req, res, next) {
   try {
     const payload = req.body || {};
     console.log('📥 WEBHOOK MP recebido:', JSON.stringify(payload));
 
-    // Responder imediatamente
+    // responde 200 cedo pro MP não dar timeout
     res.status(200).json({ received: true });
 
-    // Processar apenas eventos de pagamento
-    if (payload.type === 'payment' && payload.data?.id) {
-      console.log('💳 Processando pagamento, ID:', payload.data.id);
+    if (payload.type !== 'payment' || !payload.data?.id) {
+      return;
+    }
 
-      try {
-        // Buscar informações do pagamento no Mercado Pago
-        const mercadopago = require('mercadopago');
-        const { MercadoPagoConfig, Payment } = mercadopago;
-        
-        const client = new MercadoPagoConfig({
-          accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN,
-        });
-        const payment = new Payment(client);
+    const paymentId = payload.data.id;
+    console.log('💳 Processando pagamento, ID:', paymentId);
 
-        const paymentInfo = await payment.get({ id: payload.data.id });
-        console.log('💰 Status do pagamento:', paymentInfo.status);
+    if (!mpPayment) {
+      console.error('❌ mpPayment não configurado.');
+      return;
+    }
 
-        // Se pagamento aprovado
-        if (paymentInfo.status === 'approved') {
-          const agendamentoId = paymentInfo.external_reference;
+    try {
+      const paymentResp = await mpPayment.get({ id: paymentId });
+      const payment = paymentResp && paymentResp.body ? paymentResp.body : paymentResp;
 
-          if (agendamentoId) {
-            const agendamento = await Agendamento.findById(agendamentoId).populate('paciente');
+      console.log('💳 Detalhes do pagamento:', JSON.stringify(payment));
 
-            if (agendamento) {
-              // Atualizar status do pagamento
-              agendamento.statusPagamento = 'pago';
-              agendamento.metodoPagamento = 'mercadopago';
-              agendamento.dataPagamento = new Date();
-              agendamento.status = 'confirmado';
-              await agendamento.save();
+      const status = payment.status;
+      const metadata = payment.metadata || {};
+      const leadId = metadata.leadId || payment.external_reference;
 
-              console.log('✅ Agendamento atualizado:', agendamentoId);
-
-              // ENVIAR EMAIL DE CONFIRMAÇÃO
-              try {
-                await enviarEmailConfirmacao(agendamento);
-                console.log('📧 Email de confirmação enviado!');
-              } catch (emailError) {
-                console.error('⚠️ Erro ao enviar email:', emailError.message);
-              }
-            }
-          }
-        }
-      } catch (processError) {
-        console.error('❌ Erro ao processar webhook:', processError.message);
+      if (!leadId) {
+        console.warn('⚠️ Pagamento sem leadId na metadata/external_reference, ignorando.');
+        return;
       }
+
+      const lead = await Lead.findById(leadId);
+      if (!lead) {
+        console.warn('⚠️ Lead não encontrado para leadId:', leadId);
+        return;
+      }
+
+      lead.mpLastPaymentId = String(paymentId);
+      await lead.save();
+
+      if (status === 'approved') {
+        console.log('✅ Pagamento aprovado para lead:', leadId);
+
+        // já foi convertido? evita duplicar
+        if (lead.statusLead === 'convertido' && lead.agendamento) {
+          console.log('ℹ️ Lead já convertido anteriormente. Nada a fazer.');
+          return;
+        }
+
+        // garante paciente
+        let paciente = null;
+        if (lead.paciente) {
+          paciente = await Paciente.findById(lead.paciente);
+        }
+
+        if (!paciente) {
+          paciente = await Paciente.create({
+            nome: lead.nome,
+            email: lead.email,
+            telefone: lead.telefone,
+            cpf: lead.cpf,
+            dataNascimento: lead.dataNascimento,
+            endereco: lead.endereco
+          });
+        }
+
+        const ehPacote = lead.tipoSessao !== 'avulsa';
+        const tipoPacote =
+          lead.tipoSessao === 'pacote_mensal'
+            ? 'mensal'
+            : lead.tipoSessao === 'pacote_anual'
+            ? 'anual'
+            : null;
+        const totalSessoes =
+          lead.tipoSessao === 'pacote_mensal'
+            ? 4
+            : lead.tipoSessao === 'pacote_anual'
+            ? 48
+            : 1;
+
+        const agendamento = await Agendamento.create({
+          paciente: paciente._id,
+          leadOrigem: lead._id,
+          dataHora: lead.dataHora,
+          duracao: 60,
+          tipo:
+            lead.tipoSessao === 'pacote_mensal' || lead.tipoSessao === 'pacote_anual'
+              ? lead.tipoSessao
+              : 'avulsa',
+          status: 'confirmado',
+          statusLeitura: 'novo',
+          valor: lead.valor,
+          pacote: {
+            ehPacote,
+            tipoPacote,
+            totalSessoes,
+            sessaoAtual: 1
+          },
+          parcelamento: {
+            parcelas: lead.parcelamento?.parcelas || 1,
+            valorParcela: lead.parcelamento?.valorParcela || lead.valor
+          },
+          pagamento: {
+            status: 'aprovado',
+            metodo: 'mercadopago',
+            transacaoId: String(paymentId),
+            preferenceId: lead.mpPreferenceId || null,
+            dataPagamento: new Date(payment.date_approved || Date.now())
+          },
+          observacoes: lead.observacoes
+        });
+
+        lead.statusLead = 'convertido';
+        lead.agendamento = agendamento._id;
+        await lead.save();
+
+        // TODO: atualizar disponibilidade de horários
+        // TODO: criar evento no Google Calendar
+
+        try {
+          await enviarEmailConfirmacao(agendamento);
+        } catch (e) {
+          console.error('⚠️ Erro ao enviar e-mail de confirmação:', e);
+        }
+      } else if (status === 'rejected' || status === 'cancelled') {
+        console.log('❌ Pagamento não aprovado para lead:', leadId, 'status:', status);
+        lead.statusLead = 'cancelado';
+        await lead.save();
+      } else {
+        console.log('ℹ️ Pagamento em status intermediário:', status);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao processar pagamento no webhook:', error);
     }
   } catch (err) {
-    console.error('❌ Erro no webhook:', err);
+    console.error('Erro no webhookMercadoPago:', err);
+    next(err);
   }
 }
 
@@ -188,7 +405,7 @@ async function confirmarPagamentoManual(req, res, next) {
     if (!agendamentoId) {
       return res.status(400).json({
         success: false,
-        message: 'agendamentoId é obrigatório.',
+        message: 'agendamentoId é obrigatório.'
       });
     }
 
@@ -196,63 +413,59 @@ async function confirmarPagamentoManual(req, res, next) {
     if (!ag) {
       return res.status(404).json({
         success: false,
-        message: 'Agendamento não encontrado.',
+        message: 'Agendamento não encontrado.'
       });
     }
 
-    ag.statusPagamento = 'pago';
-    ag.metodoPagamento = metodo;
-    ag.dataPagamento = new Date();
-    ag.observacaoPagamento = comprovante || '';
+    ag.status = 'confirmado';
+    ag.pagamento.status = 'aprovado';
+    ag.pagamento.metodo = metodo;
+    ag.pagamento.dataPagamento = new Date();
+    if (comprovante) {
+      ag.pagamento.comprovante = comprovante;
+    }
 
     await ag.save();
-
-    console.log('✅ Pagamento confirmado manualmente:', agendamentoId);
 
     try {
       await enviarEmailConfirmacao(ag);
     } catch (e) {
-      console.warn('⚠️ Falha ao enviar e-mail de confirmação:', e?.message);
+      console.error('⚠️ Erro ao enviar e-mail de confirmação (manual):', e);
     }
 
     return res.json({
       success: true,
-      message: 'Pagamento confirmado com sucesso!',
-      data: {
-        agendamentoId: ag._id,
-        statusPagamento: ag.statusPagamento,
-      },
+      message: 'Pagamento confirmado manualmente.',
+      data: ag
     });
   } catch (err) {
-    console.error('❌ Erro ao confirmar pagamento:', err);
     next(err);
   }
 }
 
 /**
  * GET /api/pagamentos/:agendamentoId
+ * Retorna status de pagamento de um agendamento
  */
 async function buscarStatusPagamento(req, res, next) {
   try {
     const { agendamentoId } = req.params;
-    const ag = await Agendamento.findById(agendamentoId).lean();
+    const ag = await Agendamento.findById(agendamentoId);
 
     if (!ag) {
       return res.status(404).json({
         success: false,
-        message: 'Agendamento não encontrado.',
+        message: 'Agendamento não encontrado.'
       });
     }
 
     return res.json({
       success: true,
       data: {
-        agendamentoId: ag._id,
-        statusPagamento: ag.statusPagamento || 'pendente',
-        metodoPagamento: ag.metodoPagamento || null,
-        preferenciaId: ag.preferenciaId || null,
-        dataPagamento: ag.dataPagamento || null,
-      },
+        status: ag.pagamento.status,
+        metodo: ag.pagamento.metodo,
+        dataPagamento: ag.pagamento.dataPagamento || null
+      }
     });
   } catch (err) {
     next(err);
@@ -263,5 +476,5 @@ module.exports = {
   criarPreferenciaPagamento,
   webhookMercadoPago,
   confirmarPagamentoManual,
-  buscarStatusPagamento,
+  buscarStatusPagamento
 };

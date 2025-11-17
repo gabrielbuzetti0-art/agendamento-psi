@@ -125,12 +125,10 @@ const pacienteAPI = {
 // ==============================
 const pagamentoAPI = {
     // Criar preferência de pagamento no Mercado Pago
-    criarPreferencia: (agendamentoId, extras = {}) => fetchAPI('/pagamentos/criar-preferencia', {
+    // Agora recebe TODOS os dados do lead/formulário
+    criarPreferencia: (dados) => fetchAPI('/pagamentos/criar-preferencia', {
         method: 'POST',
-        body: JSON.stringify({
-            agendamentoId,
-            ...extras // caso queira mandar descricao, urls, etc.
-        })
+        body: JSON.stringify(dados)
     }),
 
     // Confirmar pagamento manual (PIX, dinheiro, transferência)
@@ -139,9 +137,10 @@ const pagamentoAPI = {
         body: JSON.stringify(dados)
     }),
 
-    // Buscar status do pagamento de um agendamento
+    // Buscar status do pagamento de um agendamento (ainda disponível se precisar)
     buscarStatus: (agendamentoId) => fetchAPI(`/pagamentos/${agendamentoId}`)
 };
+
 
 // ==============================
 // Funções auxiliares (Utils)
