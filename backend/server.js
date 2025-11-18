@@ -27,11 +27,13 @@ const disponibilidadeRoutes = require('./routes/disponibilidadeRoutes');
 const agendamentoRoutes = require('./routes/agendamentoRoutes');
 const pacienteRoutes = require('./routes/pacienteRoutes');
 const pagamentoRoutes = require('./routes/pagamentoRoutes');
+const leadRoutes = require('./routes/leadRoutes'); // 👈 NOVO
 
 app.use('/api/disponibilidade', disponibilidadeRoutes);
 app.use('/api/agendamentos', agendamentoRoutes);
 app.use('/api/pacientes', pacienteRoutes);
 app.use('/api/pagamentos', pagamentoRoutes);
+app.use('/api/leads', leadRoutes);
 
 // Rota raiz
 app.get('/', (req, res) => {

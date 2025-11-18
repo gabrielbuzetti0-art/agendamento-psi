@@ -584,3 +584,107 @@ exports.buscarHorariosDisponiveis = async (req, res) => {
     });
   }
 };
+// =========================
+// Estatísticas para o dashboard
+// =========================
+exports.obterEstatisticasDashboard = async (req, res) => {
+  try {
+    // Hoje (00:00 até 23:59)
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const amanha = new Date(hoje);
+    amanha.setDate(amanha.getDate() + 1);
+
+    const [
+      totalAgendamentos,
+      totalConfirmados,
+      totalCancelados,
+      totalPagos,
+      totalPendentes,
+      agendamentosHoje
+    ] = await Promise.all([
+      Agendamento.countDocuments({}),
+      Agendamento.countDocuments({ status: 'confirmado' }),
+      Agendamento.countDocuments({ status: 'cancelado' }),
+      Agendamento.countDocuments({ 'pagamento.status': 'aprovado' }),
+      Agendamento.countDocuments({ 'pagamento.status': 'pendente' }),
+      Agendamento.countDocuments({
+        dataHora: { $gte: hoje, $lt: amanha },
+        status: { $ne: 'cancelado' }
+      })
+    ]);
+
+    // Série dos últimos 30 dias (pra gráfico de evolução)
+    const inicio = new Date();
+    inicio.setDate(inicio.getDate() - 29);
+    inicio.setHours(0, 0, 0, 0);
+
+    const porDia = await Agendamento.aggregate([
+      {
+        $match: {
+          dataHora: { $gte: inicio }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            ano: { $year: '$dataHora' },
+            mes: { $month: '$dataHora' },
+            dia: { $dayOfMonth: '$dataHora' }
+          },
+          total: { $sum: 1 },
+          confirmados: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'confirmado'] }, 1, 0]
+            }
+          },
+          cancelados: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'cancelado'] }, 1, 0]
+            }
+          },
+          pagos: {
+            $sum: {
+              $cond: [{ $eq: ['$pagamento.status', 'aprovado'] }, 1, 0]
+            }
+          }
+        }
+      },
+      {
+        $sort: {
+          '_id.ano': 1,
+          '_id.mes': 1,
+          '_id.dia': 1
+        }
+      }
+    ]);
+
+    const serieUltimos30Dias = porDia.map((item) => ({
+      data: `${String(item._id.dia).padStart(2, '0')}/${String(item._id.mes).padStart(2, '0')}`,
+      total: item.total,
+      confirmados: item.confirmados,
+      cancelados: item.cancelados,
+      pagos: item.pagos
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        totalAgendamentos,
+        totalConfirmados,
+        totalCancelados,
+        totalPagos,
+        totalPendentes,
+        agendamentosHoje,
+        serieUltimos30Dias
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erro ao obter estatísticas do dashboard:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao obter estatísticas do dashboard',
+      error: error.message
+    });
+  }
+};

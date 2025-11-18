@@ -1,28 +1,30 @@
+// backend/routes/agendamentoRoutes.js
 const express = require('express');
 const router = express.Router();
 const agendamentoController = require('../controllers/agendamentoController');
 
-// IMPORTANTE: Rotas específicas ANTES de rotas com parâmetros dinâmicos!
-
-// Disponibilidade geral para o calendário (por mês)
-router.get('/disponibilidade-calendario', agendamentoController.disponibilidadeCalendario);
-
-// Buscar horários disponíveis (Etapa 2)
-router.get('/horarios-disponiveis', agendamentoController.buscarHorariosDisponiveis);
-
-// Listar agendamentos
-router.get('/', agendamentoController.listarAgendamentos);
-
-// Criar novo agendamento
+// Criar agendamento (usado em alguns fluxos internos – com o novo fluxo a gente quase só usa Lead + webhook)
 router.post('/', agendamentoController.criarAgendamento);
 
-// Buscar agendamento por ID (DEVE VIR DEPOIS!)
+// Listar agendamentos com filtros (admin)
+router.get('/', agendamentoController.listarAgendamentos);
+
+// Disponibilidade resumida do calendário (cores dos dias)
+router.get('/disponibilidade-calendario', agendamentoController.disponibilidadeCalendario);
+
+// Horários disponíveis (considerando avulsa/pacotes)
+router.get('/horarios-disponiveis', agendamentoController.buscarHorariosDisponiveisPacote);
+
+// 📊 Estatísticas para o dashboard
+router.get('/estatisticas/dashboard', agendamentoController.obterEstatisticasDashboard);
+
+// Buscar agendamento por ID
 router.get('/:id', agendamentoController.buscarAgendamentoPorId);
 
-// Atualizar status do agendamento
+// Atualizar status (confirmado / cancelado / etc.)
 router.patch('/:id/status', agendamentoController.atualizarStatusAgendamento);
 
 // Cancelar agendamento
-router.patch('/:id/cancelar', agendamentoController.cancelarAgendamento);
+router.post('/:id/cancelar', agendamentoController.cancelarAgendamento);
 
 module.exports = router;
