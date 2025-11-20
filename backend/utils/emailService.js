@@ -1,24 +1,48 @@
+// backend/services/emailService.js (ou caminho equivalente)
 const nodemailer = require('nodemailer');
 
-// Configurar transporter do nodemailer
+// ==============================
+// CONFIGURAÇÃO DO TRANSPORTER
+// ==============================
+const emailHost = process.env.EMAIL_HOST || 'smtp.gmail.com';
+const emailPort = Number(process.env.EMAIL_PORT || 587); // 587 = STARTTLS (padrão Gmail)
+const emailSecure = emailPort === 465; // 465 = SSL direto
+
 const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: process.env.EMAIL_PORT,
-  secure: false,
+  host: emailHost,
+  port: emailPort,
+  secure: emailSecure,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
-  }
+  },
+  // Mantém compatibilidade com alguns provedores
+  tls: {
+    rejectUnauthorized: false
+  },
+  // Evita ficar pendurado muito tempo tentando conectar
+  connectionTimeout: 10000, // 10s
+  greetingTimeout: 10000,   // 10s
+  socketTimeout: 20000      // 20s
 });
 
-// Verificar conexão
-transporter.verify(function (error, success) {
-  if (error) {
-    console.log('❌ Erro na configuração do email:', error);
-  } else {
+// ==============================
+// VERIFICAÇÃO (NÃO DERRUBA O APP)
+// ==============================
+transporter
+  .verify()
+  .then(() => {
     console.log('✅ Servidor de email pronto para enviar mensagens');
-  }
-});
+  })
+  .catch((err) => {
+    console.warn(
+      '⚠️ Não foi possível verificar o servidor de email agora (mas o sistema continua rodando). Detalhe:',
+      err.message
+    );
+  });
+
+module.exports = transporter;
+
 
 // Formatar data e hora para exibição
 const formatarDataHora = (dataHora) => {
