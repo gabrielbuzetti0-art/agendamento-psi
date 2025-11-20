@@ -3,28 +3,47 @@ const express = require('express');
 const router = express.Router();
 const agendamentoController = require('../controllers/agendamentoController');
 
-// Criar agendamento (usado em alguns fluxos internos – com o novo fluxo a gente quase só usa Lead + webhook)
-router.post('/', agendamentoController.criarAgendamento);
+// Helper pra garantir que SEMPRE vamos passar uma função pro Express
+function safe(handlerName) {
+  const fn = agendamentoController[handlerName];
 
-// Listar agendamentos com filtros (admin)
-router.get('/', agendamentoController.listarAgendamentos);
+  if (typeof fn === 'function') {
+    return fn;
+  }
 
-// Disponibilidade resumida do calendário (cores dos dias)
-router.get('/disponibilidade-calendario', agendamentoController.disponibilidadeCalendario);
+  // Se não tiver implementado, não derruba o servidor, só responde 500
+  console.warn(`⚠️ Handler agendamentoController.${handlerName} não encontrado.`);
 
-// Horários disponíveis (considerando avulsa/pacotes)
-router.get('/horarios-disponiveis', agendamentoController.buscarHorariosDisponiveisPacote);
+  return (req, res) => {
+    res.status(500).json({
+      success: false,
+      message: `Handler agendamentoController.${handlerName} não implementado no backend.`
+    });
+  };
+}
 
-// 📊 Estatísticas para o dashboard
-router.get('/estatisticas/dashboard', agendamentoController.obterEstatisticasDashboard);
+// =====================
+// ROTAS DE AGENDAMENTO
+// =====================
 
-// Buscar agendamento por ID
-router.get('/:id', agendamentoController.buscarAgendamentoPorId);
+// Lista agendamentos (com filtros opcionais)
+// usado pelo painel admin (aba "Agendamentos") e pelas estatísticas
+router.get('/', safe('listarAgendamentos'));
 
-// Atualizar status (confirmado / cancelado / etc.)
-router.patch('/:id/status', agendamentoController.atualizarStatusAgendamento);
+// Calendário de disponibilidade
+// usado pelo formulário de agendamento (agendamento.js)
+router.get('/disponibilidade-calendario', safe('listarDisponibilidadeCalendario'));
+
+// Horários disponíveis para uma data específica
+router.get('/horarios-disponiveis', safe('listarHorariosDisponiveis'));
+
+// Criar agendamento (modo antigo/manual – mantido por compatibilidade)
+router.post('/', safe('criarAgendamento'));
+
+// Atualizar status do agendamento (confirmar, etc.)
+router.patch('/:id/status', safe('atualizarStatusAgendamento'));
 
 // Cancelar agendamento
-router.post('/:id/cancelar', agendamentoController.cancelarAgendamento);
+router.patch('/:id/cancelar', safe('cancelarAgendamento'));
 
 module.exports = router;

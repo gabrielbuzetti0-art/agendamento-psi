@@ -375,7 +375,7 @@ exports.cancelarAgendamento = async (req, res) => {
 // =========================
 // Disponibilidade geral para o calendário (por mês)
 // =========================
-exports.disponibilidadeCalendario = async (req, res) => {
+exports.listarDisponibilidadeCalendario = async (req, res) => {
   try {
     const { ano, mes } = req.query;
 
@@ -492,7 +492,7 @@ exports.disponibilidadeCalendario = async (req, res) => {
 // =========================
 // Buscar horários disponíveis (Etapa 2)
 // =========================
-exports.buscarHorariosDisponiveis = async (req, res) => {
+exports.listarHorariosDisponiveis = async (req, res) => {
   try {
     const { data, tipo } = req.query;
 
